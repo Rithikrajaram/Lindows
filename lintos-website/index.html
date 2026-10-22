@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lintos — The Dual-Boot Linux & Windows Ecosystem</title>
+  <meta name="description" content="Seamlessly bridge Linux and Windows dual-boot setups. Auto-sync Chrome downloads, auto-mount NTFS partitions with Lindows Access, and enjoy unified file access.">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            },
+            dark: {
+              900: '#070a13',
+              800: '#0c1222',
+              700: '#151f38',
+              600: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & Babel for in-browser React rendering -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-[#070a13] text-slate-100 antialiased selection:bg-brand-500 selection:text-white relative">
+
+  <!-- Ambient Glow Effects -->
+  <div class="glow-blob w-[500px] h-[500px] bg-sky-500/15 top-[-100px] left-[-100px] animate-pulse-glow"></div>
+  <div class="glow-blob w-[600px] h-[600px] bg-purple-600/15 top-[30%] right-[-150px] animate-pulse-glow" style="animation-delay: -3s;"></div>
+  <div class="glow-blob w-[600px] h-[600px] bg-cyan-600/10 bottom-[10%] left-[10%] animate-pulse-glow" style="animation-delay: -1.5s;"></div>
+
+  <div id="root"></div>
+
+  <!-- React Application Code -->
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [copiedCmd, setCopiedCmd] = useState("");
+      const [simState, setSimState] = useState("idle"); // idle, downloading, prompting, syncing, done
+      const [activeTab, setActiveTab] = useState("chrome");
+      const [activeGuideStep, setActiveGuideStep] = useState(1);
+
+      const copyToClipboard = (text, id) => {
+        navigator.clipboard.writeText(text);
+        setCopiedCmd(id);
+        setTimeout(() => setCopiedCmd(""), 2200);
+      };
+
+      // Simulator trigger
+      const runSimulator = () => {
+        if (simState !== "idle") return;
+        setSimState("downloading");
+        setTimeout(() => setSimState("prompting"), 1200);
+      };
+
+      const handleConfirmSync = () => {
+        setSimState("syncing");
+        setTimeout(() => setSimState("done"), 1400);
+        setTimeout(() => setSimState("idle"), 4500);
+      };
+
+      return (
+        <div class="min-h-screen flex flex-col justify-between relative z-10">
+          
+          {/* Top Navbar */}
+          <header class="sticky top-0 z-50 glass-panel border-b border-white/10 backdrop-blur-md">
+            <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+              
+              {/* Brand Logo */}
+              <a href="#" class="flex items-center gap-3 group">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/30 group-hover:scale-105 transition-transform">
+                  <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67M2.5 22v-6h6M2.66 8.43a10 10 0 0 1 .57 8.38L-2.44 22.48"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xl font-extrabold tracking-tight text-white">LINTOS</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">ECOSYSTEM</span>
+                  </div>
+                  <p class="text-xs text-slate-400 hidden sm:block">Linux &amp; Windows Dual-Boot Suite</p>
+                </div>
+              </a>
+
+              {/* Navigation Links */}
+              <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+                <a href="#features" class="hover:text-brand-400 transition-colors">Features</a>
+                <a href="#extension" class="hover:text-brand-400 transition-colors">Chrome Extension</a>
+                <a href="#desktop" class="hover:text-brand-400 transition-colors">Lindows Desktop Tray</a>
+                <a href="#guide" class="hover:text-brand-400 transition-colors">Install Guide</a>
+                <a href="#troubleshooting" class="hover:text-brand-400 transition-colors">Dual-Boot Tips</a>
+              </nav>
+
+              {/* Action Buttons */}
+              <div class="flex items-center gap-3">
+                <a 
+                  href="https://github.com/Rithikrajaram/Lindows" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-all hover:border-slate-400"
+                >
+                  <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                  </svg>
+                  <span>GitHub</span>
+                </a>
+                <a 
+                  href="#guide" 
+                  class="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-semibold text-sm shadow-md shadow-brand-500/25 transition-all hover:shadow-brand-500/40 hover:-translate-y-0.5"
+                >
+                  <span>Get Started</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
+              </div>
+            </div>
+          </header>
+
+          {/* Hero Section */}
+          <section class="pt-16 pb-24 px-6 relative">
+            <div class="max-w-6xl mx-auto text-center space-y-8">
+              
+              {/* Eyebrow Badge */}
+              <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-semibold tracking-wide uppercase">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>The Unified Dual-Boot Operating Suite</span>
+              </div>
+
+              {/* Main Headline */}
+              <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.1] max-w-4xl mx-auto">
+                Bridging the Gap Between <span class="gradient-accent">Linux &amp; Windows</span>
+              </h1>
+
+              {/* Subheading */}
+              <p class="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
+                Download a driver or document on Linux, and it's already in your Windows partition. 
+                With <strong class="text-white font-semibold">DualSync</strong> and the <strong class="text-white font-semibold">Lindows Access</strong> system tray, dual-booting feels like one unified OS.
+              </p>
+
+              {/* CTA Row */}
+              <div class="flex flex-wrap items-center justify-center gap-4 pt-4">
+                <a 
+                  href="#extension"
+                  class="px-7 py-3.5 rounded-xl bg-gradient-to-r from-brand-600 via-blue-600 to-purple-600 text-white font-bold text-base shadow-xl shadow-brand-500/30 hover:shadow-brand-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2.5"
+                >
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                  <span>Get Chrome Extension</span>
+                </a>
+                <a 
+                  href="#desktop"
+                  class="px-7 py-3.5 rounded-xl glass-panel text-white font-semibold text-base hover:bg-white/10 border border-white/15 transition-all flex items-center gap-2.5"
+                >
+                  <svg class="w-5 h-5 text-brand-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                  <span>Lindows Access Tray App</span>
+                </a>
+              </div>
+
+              {/* Interactive Dual-Boot Simulator Stage */}
+              <div class="pt-12 max-w-4xl mx-auto">
+                <div class="glass-panel rounded-2xl p-6 sm:p-8 border border-white/15 shadow-2xl relative overflow-hidden">
+                  
+                  <div class="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+                    <div class="flex items-center gap-3">
+                      <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+                      <span class="w-3 h-3 rounded-full bg-yellow-500/80"></span>
+                      <span class="w-3 h-3 rounded-full bg-green-500/80"></span>
+                      <span class="text-xs font-mono text-slate-400 ml-2">Lintos Dual-Boot Live Transfer Beam</span>
+                    </div>
+                    <button 
+                      onClick={runSimulator}
+                      disabled={simState !== "idle"}
+                      class={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${simState === 'idle' ? 'bg-brand-500 text-white hover:bg-brand-400 shadow-md shadow-brand-500/30 cursor-pointer' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                    >
+                      <svg class={`w-3.5 h-3.5 ${simState !== 'idle' ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67M2.5 22v-6h6M2.66 8.43a10 10 0 0 1 .57 8.38L-2.44 22.48"/></svg>
+                      <span>{simState === "idle" ? "▶ Simulate Linux Download" : "Simulating Transfer..."}</span>
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                    
+                    {/* Linux Side */}
+                    <div class="p-5 rounded-xl bg-slate-900/80 border border-white/10 text-left space-y-4">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xl">🐧</span>
+                          <span class="font-bold text-sm text-white">Linux Host (Current OS)</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded">Active Session</span>
+                      </div>
+
+                      <div class="p-3 rounded-lg bg-slate-800/80 border border-slate-700 font-mono text-xs text-slate-300">
+                        <p class="text-slate-400">Path: /home/user/Downloads</p>
+                        <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-700">
+                          <div class="flex items-center gap-2">
+                            <span class="text-sky-400">📄</span>
+                            <span class="font-semibold text-white">nvidia-driver-550.run</span>
+                          </div>
+                          <span class={`text-[10px] font-bold px-2 py-0.5 rounded ${simState === 'idle' ? 'text-slate-400 bg-slate-700' : 'text-emerald-400 bg-emerald-500/20'}`}>
+                            {simState === 'idle' ? 'Ready' : 'Downloaded'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Notification Prompt Mock */}
+                      {simState === "prompting" && (
+                        <div class="p-4 rounded-xl bg-slate-800 border-2 border-brand-400 shadow-xl shadow-brand-500/20 animate-float">
+                          <div class="flex items-center gap-2 text-xs font-bold text-brand-400 mb-1">
+                            <span>🔄 DualSync Prompt</span>
+                          </div>
+                          <p class="text-xs text-white font-medium">Sync "nvidia-driver-550.run" to Windows Drive?</p>
+                          <div class="flex gap-2 mt-3">
+                            <button 
+                              onClick={handleConfirmSync}
+                              class="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded text-xs font-bold shadow transition-all cursor-pointer"
+                            >
+                              ✓ Yes, Sync to Windows
+                            </button>
+                            <button 
+                              onClick={() => setSimState("idle")}
+                              class="px-3 py-1 bg-slate-700 text-slate-300 rounded text-xs"
+                            >
+                              ✕ Skip
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Windows Side */}
+                    <div class="p-5 rounded-xl bg-slate-900/80 border border-white/10 text-left space-y-4">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xl">🪟</span>
+                          <span class="font-bold text-sm text-white">Windows NTFS Partition</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Mounted Target</span>
+                      </div>
+
+                      <div class="p-3 rounded-lg bg-slate-800/80 border border-slate-700 font-mono text-xs text-slate-300">
+                        <p class="text-slate-400">Path: /mnt/windows/Users/Asus/Downloads</p>
+                        <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-700">
+                          <div class="flex items-center gap-2">
+                            <span class="text-purple-400">📦</span>
+                            <span class="font-semibold text-white">
+                              {simState === "done" ? "nvidia-driver-550.run" : "(Waiting for mirror...)"}
+                            </span>
+                          </div>
+                          <span class={`text-[10px] font-bold px-2 py-0.5 rounded ${simState === 'done' ? 'text-emerald-400 bg-emerald-500/20' : 'text-slate-500 bg-slate-800'}`}>
+                            {simState === 'done' ? '✓ Synced & Ready' : 'Standby'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="text-xs text-slate-400 flex items-center gap-2 pt-2">
+                        <span class="text-emerald-400">●</span>
+                        <span>Next time you boot Windows, files are ready immediately!</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          {/* Three Pillars Section */}
+          <section id="features" class="py-20 px-6 border-t border-white/10 bg-slate-950/40">
+            <div class="max-w-6xl mx-auto">
+              
+              <div class="text-center max-w-2xl mx-auto mb-16 space-y-3">
+                <span class="text-xs font-bold text-brand-400 tracking-wider uppercase">Unified Dual-Boot Architecture</span>
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-white">The Three Pillars of Lintos</h2>
+                <p class="text-slate-400 text-sm sm:text-base">Designed to eliminate the frustrating friction of rebooting back and forth.</p>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                {/* Card 1 */}
+                <div class="glass-panel p-8 rounded-2xl glass-card-hover border border-white/10 flex flex-col justify-between">
+                  <div class="space-y-4">
+                    <div class="w-12 h-12 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20 flex items-center justify-center text-2xl">
+                      ⚡
+                    </div>
+                    <h3 class="text-xl font-bold text-white">DualSync Extension</h3>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                      Manifest V3 Chrome extension. Automatically observes completed downloads in Linux and triggers the zero-delay mirror prompt.
+                    </p>
+                  </div>
+                  <ul class="mt-6 pt-6 border-t border-white/10 text-xs text-slate-400 space-y-2.5">
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 1-Click Interactive Notification</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Auto-detects partition mounts</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> 100% Offline &amp; Private</li>
+                  </ul>
+                </div>
+
+                {/* Card 2 */}
+                <div class="glass-panel p-8 rounded-2xl glass-card-hover border border-white/10 flex flex-col justify-between">
+                  <div class="space-y-4">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-2xl">
+                      🪟
+                    </div>
+                    <h3 class="text-xl font-bold text-white">Lindows Access Tray</h3>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                      Lightweight Python system tray daemon. Automatically mounts Windows NTFS drives on Linux with one click, or opens WSL files on Windows.
+                    </p>
+                  </div>
+                  <ul class="mt-6 pt-6 border-t border-white/10 text-xs text-slate-400 space-y-2.5">
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> "Open Windows Drive" button</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Auto-mounts unmounted NTFS</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Windows-to-Linux Reverse Sync</li>
+                  </ul>
+                </div>
+
+                {/* Card 3 */}
+                <div class="glass-panel p-8 rounded-2xl glass-card-hover border border-white/10 flex flex-col justify-between">
+                  <div class="space-y-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-2xl">
+                      🛡️
+                    </div>
+                    <h3 class="text-xl font-bold text-white">Native Messaging Bridge</h3>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                      Secure, direct stdio binary channel connecting the browser to host filesystem operations with full permission checks and write verification.
+                    </p>
+                  </div>
+                  <ul class="mt-6 pt-6 border-t border-white/10 text-xs text-slate-400 space-y-2.5">
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Zero memory overhead</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Supports Chrome, Brave, Edge</li>
+                    <li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> Detects Read-Only Fast Startup</li>
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+          {/* Lintos Chrome Extension Section */}
+          <section id="extension" class="py-20 px-6 border-t border-white/10">
+            <div class="max-w-6xl mx-auto">
+              
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                
+                <div class="space-y-6">
+                  <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-brand-500/10 text-brand-400 text-xs font-bold">
+                    <span>BROWSER COMPONENT</span>
+                  </div>
+                  <h2 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
+                    DualSync Chrome Extension (Manifest V3)
+                  </h2>
+                  <p class="text-slate-300 text-base leading-relaxed">
+                    The frontend interface for your dual-boot syncing. It features a modern dark glassmorphic popup to test your bridge connection, view sync stats, and customize your target folders.
+                  </p>
+
+                  <div class="space-y-3 pt-2">
+                    <div class="flex items-start gap-3">
+                      <div class="w-6 h-6 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</div>
+                      <p class="text-sm text-slate-300"><strong class="text-white">Seamless Download Listener:</strong> Hooks into Chrome's download API to detect finished files automatically.</p>
+                    </div>
+                    <div class="flex items-start gap-3">
+                      <div class="w-6 h-6 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</div>
+                      <p class="text-sm text-slate-300"><strong class="text-white">Interactive Prompt:</strong> Don't want to sync every single file? The desktop notification prompt lets you choose on the fly.</p>
+                    </div>
+                    <div class="flex items-start gap-3">
+                      <div class="w-6 h-6 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</div>
+                      <p class="text-sm text-slate-300"><strong class="text-white">Instant Presets &amp; Auto-Detection:</strong> Discovers Windows drive mount points in <code class="text-brand-300 bg-slate-800 px-1 py-0.5 rounded">/run/media</code>, <code class="text-brand-300 bg-slate-800 px-1 py-0.5 rounded">/mnt</code>, or WSL.</p>
+                    </div>
+                  </div>
+
+                  <div class="pt-4 flex flex-wrap gap-4">
+                    <a 
+                      href="#guide" 
+                      class="px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-500/30 flex items-center gap-2"
+                    >
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                      <span>View Developer Mode Install Guide</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* UI Mockup Card */}
+                <div class="glass-panel p-6 rounded-2xl border border-white/15 shadow-2xl space-y-4 max-w-md mx-auto">
+                  <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-purple-600 flex items-center justify-center text-white">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67M2.5 22v-6h6M2.66 8.43a10 10 0 0 1 .57 8.38L-2.44 22.48"/></svg>
+                      </div>
+                      <div>
+                        <h4 class="text-sm font-bold text-white leading-none">DualSync</h4>
+                        <span class="text-[10px] text-slate-400">Settings &amp; Bridge</span>
+                      </div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Connected
+                    </span>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div class="p-3 rounded-lg bg-slate-900/80 border border-white/10 flex items-center justify-between">
+                      <div>
+                        <div class="text-xs font-bold text-white">Auto-Sync to Windows</div>
+                        <div class="text-[10px] text-slate-400">Mirror downloads automatically</div>
+                      </div>
+                      <div class="w-9 h-5 rounded-full bg-brand-500 relative"><span class="w-4 h-4 rounded-full bg-white absolute top-0.5 right-0.5"></span></div>
+                    </div>
+
+                    <div class="p-3 rounded-lg bg-slate-900/80 border border-white/10 flex items-center justify-between">
+                      <div>
+                        <div class="text-xs font-bold text-white">Prompt Before Syncing</div>
+                        <div class="text-[10px] text-slate-400">Show notification with Yes/No</div>
+                      </div>
+                      <div class="w-9 h-5 rounded-full bg-brand-500 relative"><span class="w-4 h-4 rounded-full bg-white absolute top-0.5 right-0.5"></span></div>
+                    </div>
+
+                    <div class="p-3 rounded-lg bg-slate-900/80 border border-white/10 space-y-2">
+                      <div class="flex justify-between text-xs font-semibold text-white">
+                        <span>Target Windows Download Folder</span>
+                      </div>
+                      <div class="p-2 rounded bg-slate-950 border border-brand-500/50 text-xs font-mono text-brand-300 truncate">
+                        /run/media/rithik/Windows/Users/Asus/Downloads
+                      </div>
+                      <div class="flex gap-1.5 pt-1">
+                        <span class="text-[9px] px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/40 font-semibold">✨ Auto-Detected</span>
+                        <span class="text-[9px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">/mnt/windows</span>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 text-center pt-1">
+                      <div class="p-2.5 rounded-lg bg-slate-900/80 border border-white/10">
+                        <div class="text-base font-extrabold text-brand-400">42</div>
+                        <div class="text-[9px] text-slate-400 uppercase font-semibold">Files Synced</div>
+                      </div>
+                      <div class="p-2.5 rounded-lg bg-slate-900/80 border border-white/10">
+                        <div class="text-xs font-semibold text-white truncate">driver.run</div>
+                        <div class="text-[9px] text-slate-400 uppercase font-semibold">Last Synced</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </section>
+
+          {/* Lintos Desktop App Section (Lindows Access) */}
+          <section id="desktop" class="py-20 px-6 border-t border-white/10 bg-slate-950/40">
+            <div class="max-w-6xl mx-auto">
+              
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                
+                {/* Visual Display for Lindows Access */}
+                <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-white/15 space-y-6 order-2 lg:order-1">
+                  <div class="flex items-center justify-between border-b border-white/10 pb-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-xl bg-brand-600/20 border border-brand-500/30 text-brand-400 flex items-center justify-center font-bold text-lg">
+                        📂
+                      </div>
+                      <div>
+                        <h3 class="text-base font-bold text-white">Lindows Access</h3>
+                        <p class="text-xs text-slate-400">Cross-Platform System Tray Daemon</p>
+                      </div>
+                    </div>
+                    <span class="text-xs font-mono text-purple-400 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20">
+                      pystray + PIL
+                    </span>
+                  </div>
+
+                  {/* Menu Simulation */}
+                  <div class="p-4 rounded-xl bg-slate-900/90 border border-white/10 space-y-2 font-medium text-sm">
+                    <p class="text-xs font-mono text-slate-400 uppercase tracking-wider mb-2">Simulated Tray Context Menu</p>
+                    
+                    <div class="p-2.5 rounded-lg bg-brand-600/20 border border-brand-500/40 text-brand-300 flex items-center justify-between cursor-pointer hover:bg-brand-600/30">
+                      <div class="flex items-center gap-2">
+                        <span>📂</span>
+                        <span class="font-bold">Open Windows Drive</span>
+                      </div>
+                      <span class="text-[10px] text-brand-400 font-mono bg-brand-500/10 px-1.5 py-0.5 rounded">Linux</span>
+                    </div>
+
+                    <div class="p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 flex items-center justify-between cursor-pointer">
+                      <div class="flex items-center gap-2">
+                        <span>🐧</span>
+                        <span>Open Linux Files (WSL)</span>
+                      </div>
+                      <span class="text-[10px] text-slate-400 font-mono bg-slate-700 px-1.5 py-0.5 rounded">Windows</span>
+                    </div>
+
+                    <div class="p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 flex items-center justify-between cursor-pointer">
+                      <div class="flex items-center gap-2">
+                        <span>🔄</span>
+                        <span>Refresh Mounts</span>
+                      </div>
+                    </div>
+
+                    <div class="p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 flex items-center justify-between cursor-pointer border-t border-slate-700/60 pt-3">
+                      <div class="flex items-center gap-2">
+                        <span>✕</span>
+                        <span>Exit Lindows Access</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="p-3 rounded-lg bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300">
+                    💡 <strong>Smart Auto-Mount:</strong> If your Windows NTFS partition is not mounted, clicking <em>"Open Windows Drive"</em> automatically calls <code class="bg-brand-950 px-1 rounded">udisksctl</code> or mounts <code class="bg-brand-950 px-1 rounded">/mnt/windows</code> and opens the file manager directly at your Windows User profile!
+                  </div>
+                </div>
+
+                <div class="space-y-6 order-1 lg:order-2">
+                  <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-purple-500/10 text-purple-400 text-xs font-bold">
+                    <span>SYSTEM TRAY APPLICATION</span>
+                  </div>
+                  <h2 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
+                    Lindows Access: 1-Click Disk Explorer
+                  </h2>
+                  <p class="text-slate-300 text-base leading-relaxed">
+                    Ever booted into Linux and needed to grab a file from your Windows partition, but had to open the Disks app, find the partition, mount it, and navigate through deep folders? 
+                    <strong>Lindows Access</strong> sits quietly in your system tray and does it in a single click.
+                  </p>
+
+                  <div class="space-y-4 pt-2">
+                    <div class="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-2">
+                      <div class="text-xs font-bold text-white flex items-center gap-2">
+                        <span class="text-brand-400">⚡</span>
+                        <span>Quick Launch in Terminal</span>
+                      </div>
+                      <div class="flex items-center justify-between bg-black/60 p-2.5 rounded font-mono text-xs text-brand-300">
+                        <code>python3 lintos-desktop-app/lindows_access_tray.py</code>
+                        <button 
+                          onClick={() => copyToClipboard("python3 lintos-desktop-app/lindows_access_tray.py", "tray-cmd")}
+                          class="ml-2 px-2 py-1 bg-brand-600/30 hover:bg-brand-600 text-brand-300 hover:text-white rounded text-[10px] transition-all"
+                        >
+                          {copiedCmd === "tray-cmd" ? "✓ Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </section>
+
+          {/* Developer Mode Installation Guide Section */}
+          <section id="guide" class="py-20 px-6 border-t border-white/10">
+            <div class="max-w-4xl mx-auto space-y-12">
+              
+              <div class="text-center space-y-3">
+                <span class="text-xs font-bold text-brand-400 tracking-wider uppercase">Step-by-Step Setup</span>
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-white">Developer Mode Installation Guide</h2>
+                <p class="text-slate-400 text-sm sm:text-base">Get the full Lintos ecosystem running on your Linux and Windows system in under 2 minutes.</p>
+              </div>
+
+              {/* Step Flow */}
+              <div class="space-y-6">
+                
+                {/* Step 1 */}
+                <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+                  <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-sm">1</span>
+                    <h3 class="text-lg font-bold text-white">Load Chrome Extension in Developer Mode</h3>
+                  </div>
+                  <div class="text-sm text-slate-300 space-y-2 pl-11">
+                    <p>1. Open Google Chrome (or Chromium, Brave, Edge, Vivaldi).</p>
+                    <p>2. Navigate to <code class="text-brand-300 bg-slate-900 px-2 py-0.5 rounded font-mono">chrome://extensions</code> in your address bar.</p>
+                    <p>3. Toggle on <strong class="text-white">Developer mode</strong> in the top-right corner.</p>
+                    <p>4. Click <strong class="text-white">Load unpacked</strong> (top-left) and select the <code class="text-brand-300 bg-slate-900 px-2 py-0.5 rounded font-mono">lintos-extension/</code> folder.</p>
+                    <p>5. Copy your 32-character <strong class="text-brand-400 font-mono">Extension ID</strong> shown on the card.</p>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+                  <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm">2</span>
+                    <h3 class="text-lg font-bold text-white">Register the Linux Native Messaging Host</h3>
+                  </div>
+                  <div class="text-sm text-slate-300 space-y-3 pl-11">
+                    <p>Open your terminal inside the <code class="text-brand-300 bg-slate-900 px-2 py-0.5 rounded font-mono">lintos-desktop-app/</code> directory and run the 1-click installer with your Extension ID:</p>
+                    
+                    <div class="flex items-center justify-between bg-black/60 p-3 rounded-lg font-mono text-xs text-brand-300 border border-slate-800">
+                      <code>./install_host.sh &lt;YOUR_EXTENSION_ID&gt;</code>
+                      <button 
+                        onClick={() => copyToClipboard("./install_host.sh <YOUR_EXTENSION_ID>", "host-cmd")}
+                        class="ml-2 px-2.5 py-1 bg-brand-600/30 hover:bg-brand-600 text-brand-300 hover:text-white rounded text-xs transition-all font-sans"
+                      >
+                        {copiedCmd === "host-cmd" ? "✓ Copied" : "Copy"}
+                      </button>
+                    </div>
+
+                    <p class="text-xs text-slate-400">
+                      This automatically configures <code class="font-mono text-slate-300">com.dualsync.bridge.json</code> and installs it for Chrome, Brave, Chromium, and Edge.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div class="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+                  <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">3</span>
+                    <h3 class="text-lg font-bold text-white">Test Connection &amp; Enjoy Auto-Sync</h3>
+                  </div>
+                  <div class="text-sm text-slate-300 space-y-2 pl-11">
+                    <p>1. Click the DualSync icon in your Chrome toolbar.</p>
+                    <p>2. Click <strong class="text-white">"Test Bridge"</strong> — you will see a green <span class="text-emerald-400 font-bold">Connected</span> status badge.</p>
+                    <p>3. Click the auto-detected Windows path preset or type your mount directory.</p>
+                    <p>4. Click <strong class="text-white">"Save Settings"</strong>. Download any file and experience seamless dual-boot mirroring!</p>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </section>
+
+          {/* Dual-Boot Troubleshooting Section */}
+          <section id="troubleshooting" class="py-20 px-6 border-t border-white/10 bg-slate-950/40">
+            <div class="max-w-4xl mx-auto space-y-8">
+              
+              <div class="text-center space-y-2">
+                <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Crucial Dual-Boot Tips</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-white">Troubleshooting &amp; Pro-Tips</h2>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div class="p-6 rounded-xl bg-slate-900 border border-amber-500/30 space-y-3">
+                  <div class="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <span>⚠️</span>
+                    <span>1. Turn Off Windows "Fast Startup"</span>
+                  </div>
+                  <p class="text-xs text-slate-300 leading-relaxed">
+                    Windows Fast Startup leaves NTFS partitions locked in a hibernated, read-only state. When Linux boots, the drive is mounted as read-only (<code class="font-mono text-amber-300">ro</code>).
+                  </p>
+                  <div class="text-xs text-slate-400 bg-black/40 p-2.5 rounded border border-slate-800">
+                    <strong>Fix:</strong> Windows Control Panel &rarr; Power Options &rarr; "Choose what the power buttons do" &rarr; uncheck "Turn on fast startup".
+                  </div>
+                </div>
+
+                <div class="p-6 rounded-xl bg-slate-900 border border-brand-500/30 space-y-3">
+                  <div class="flex items-center gap-2 text-brand-400 font-bold text-sm">
+                    <span>⚡</span>
+                    <span>2. Auto-Mount in /etc/fstab</span>
+                  </div>
+                  <p class="text-xs text-slate-300 leading-relaxed">
+                    To have your Windows drive permanently mounted with full write permissions at boot, add your partition UUID to <code class="font-mono text-brand-300">/etc/fstab</code>:
+                  </p>
+                  <div class="text-[11px] font-mono text-slate-300 bg-black/40 p-2 rounded border border-slate-800 overflow-x-auto">
+                    UUID=... /mnt/windows ntfs-3g defaults,uid=1000,gid=1000 0 0
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer class="border-t border-white/10 py-12 px-6 glass-panel">
+            <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-slate-400">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
+                  L
+                </div>
+                <span>Lintos Dual-Boot Ecosystem &bull; Open Source</span>
+              </div>
+              <div class="flex items-center gap-6 text-xs">
+                <a href="https://github.com/Rithikrajaram/Lindows" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">GitHub Repository</a>
+                <a href="#extension" class="hover:text-white transition-colors">Extension</a>
+                <a href="#desktop" class="hover:text-white transition-colors">Desktop Tray</a>
+                <a href="#guide" class="hover:text-white transition-colors">Installation Guide</a>
+              </div>
+            </div>
+          </footer>
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
