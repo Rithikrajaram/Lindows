@@ -1,0 +1,9 @@
+{
+  "name": "com.dualsync.bridge",
+  "description": "DualSync Native Messaging Bridge for Windows/Linux file sync",
+  "path": "/home/rithik/dualsync/dualsync_bridge.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://cpmnbcocmkldpcebdhabibnepmopcild/"
+  ]
+}
