@@ -1,6 +1,7 @@
 // DualSync Popup Controller
 
 const NATIVE_HOST_NAME = "com.dualsync.bridge";
+const IS_WINDOWS = typeof navigator !== "undefined" && (navigator.platform?.includes("Win") || navigator.userAgent?.includes("Windows"));
 
 // DOM Elements
 const autoSyncToggle = document.getElementById("auto-sync-toggle");
@@ -17,18 +18,42 @@ const statSyncedCount = document.getElementById("stat-synced-count");
 const statLastSynced = document.getElementById("stat-last-synced");
 const chips = document.querySelectorAll(".chip");
 const viewGuideLink = document.getElementById("view-guide-link");
+const extIdVal = document.getElementById("ext-id-val");
+const copyIdBtn = document.getElementById("copy-id-btn");
+const copyText = document.getElementById("copy-text");
 
 // Default configuration
 const DEFAULT_CONFIG = {
   autoSync: true,
   promptBeforeSync: true,
-  targetFolder: "/run/media/rithik/Windows/Users/Asus/Downloads",
+  targetFolder: IS_WINDOWS ? "C:\\Users\\Default\\Downloads" : "/run/media/rithik/Windows/Users/Asus/Downloads",
   syncedCount: 0,
   lastSynced: "Never"
 };
 
 // Initialize
 document.addEventListener("DOMContentLoaded", async () => {
+  // Show current active extension ID
+  const activeId = chrome.runtime?.id || "dlgiaeggibjmhegpeakmgjckgpildjdb";
+  if (extIdVal) {
+    extIdVal.textContent = activeId;
+  }
+
+  // Copy Extension ID button
+  if (copyIdBtn) {
+    copyIdBtn.addEventListener("click", () => {
+      const idToCopy = chrome.runtime?.id || extIdVal?.textContent || "";
+      navigator.clipboard.writeText(idToCopy).then(() => {
+        if (copyText) {
+          copyText.textContent = "Copied!";
+          setTimeout(() => {
+            copyText.textContent = "Copy";
+          }, 2000);
+        }
+      });
+    });
+  }
+
   await loadSettings();
   await checkBridgeStatus(false);
 });
@@ -36,8 +61,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Load settings from chrome.storage.local
 async function loadSettings() {
   chrome.storage.local.get(DEFAULT_CONFIG, (items) => {
-    // Auto-migrate placeholder path
-    if (!items.targetFolder || items.targetFolder.includes("/mnt/windows") || items.targetFolder.includes("Default")) {
+    // If not set or invalid placeholder
+    if (!items.targetFolder) {
       items.targetFolder = DEFAULT_CONFIG.targetFolder;
       chrome.storage.local.set({ targetFolder: items.targetFolder });
     }
@@ -95,6 +120,7 @@ async function checkBridgeStatus(interactive = false) {
   setBridgePill("checking", "Checking...");
 
   const targetDir = targetFolderInput.value.trim() || DEFAULT_CONFIG.targetFolder;
+  const scriptName = IS_WINDOWS ? "install_host.bat" : "./install_host.sh";
 
   try {
     chrome.runtime.sendNativeMessage(
@@ -108,7 +134,7 @@ async function checkBridgeStatus(interactive = false) {
             showFeedback(
               "error",
               "Bridge Not Connected",
-              `${errMsg}. Did you run './install_host.sh' in the extension directory?`
+              `${errMsg}. Run '${scriptName}' in the extension folder to connect.`
             );
           }
           return;
@@ -118,7 +144,7 @@ async function checkBridgeStatus(interactive = false) {
           setBridgePill("connected", "Connected");
 
           // Auto-update if previous target was placeholder or not found
-          if (response.detectedPath && (targetFolderInput.value.includes("/mnt/windows") || !response.targetExists)) {
+          if (response.detectedPath && (targetFolderInput.value.includes("/mnt/windows") || targetFolderInput.value.includes("Default") || !response.targetExists)) {
             targetFolderInput.value = response.detectedPath;
             chrome.storage.local.set({ targetFolder: response.detectedPath });
           }
@@ -183,5 +209,5 @@ function showFeedback(type, title, msg) {
 // Help / Guide link click
 viewGuideLink.addEventListener("click", (e) => {
   e.preventDefault();
-  chrome.tabs.create({ url: "https://github.com/rithik/dualsync#readme" });
+  chrome.tabs.create({ url: "https://github.com/Rithikrajaram/Lindows#readme" });
 });

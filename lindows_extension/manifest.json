@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "DualSync - Linux & Windows Auto Sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Seamlessly sync downloaded files between Linux and Windows partitions in dual-boot setups.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApj3qqX3zF3ZOf+vmEnfWT2dboFBM2H+icP+qTIMjOONah+FI4GzuBOjp8WI20tkSQejL6Qhwpy5/IS9aovGXJ6/NyGPTgrc2h8ECBmSAm1KCOgtS+MmcIkRR7589ZUSl6/i/u7/GuIx+3tNHHVSiia8TBNFbc2039ofmnu0YysHpeBHyGZKl4xXz76K4EHYJobvXBP7Z+DYAyCh6DF0hOxHYGvEEj3BymfpdCyCUGKLU/u88rdqmr9LjxAlp4r7bFshcaahfJUhTn3P04qBQlG/fXXQBV1PyyYRUVcUIKNZ5HOlilEHD3cCGWovaEm2ZZbyG2fl4ujck//k8I8A9QQIDAQAB",
   "permissions": [
     "downloads",
     "nativeMessaging",

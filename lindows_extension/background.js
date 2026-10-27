@@ -38,8 +38,8 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         targetFolder: "/run/media/rithik/Windows/Users/Asus/Downloads"
       },
       (config) => {
-        // Auto-migrate placeholder /mnt/windows path to verified real path
-        if (!config.targetFolder || config.targetFolder.includes("/mnt/windows") || config.targetFolder.includes("Default")) {
+        // Set fallback targetFolder only if completely empty
+        if (!config.targetFolder) {
           config.targetFolder = "/run/media/rithik/Windows/Users/Asus/Downloads";
           chrome.storage.local.set({ targetFolder: config.targetFolder });
         }

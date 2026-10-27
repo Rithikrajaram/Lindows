@@ -45,15 +45,15 @@ dualsync/
 ## 🚀 Setup Instructions
 
 ### Step 1: Load Extension in Browser
-1. Open Google Chrome or Brave (`chrome://extensions` or `brave://extensions`).
+1. Open Google Chrome, Brave, or Edge (`chrome://extensions` or `brave://extensions` or `edge://extensions`).
 2. Enable **Developer mode** (toggle in the top-right corner).
 3. Click **Load unpacked** and select the `lindows_extension` folder.
-4. Copy the **Extension ID** (e.g. `obkmhhkdmmbpjaiadpikanbjnfcoehah`).
+> **Note:** The extension uses a fixed key (`dlgiaeggibjmhegpeakmgjckgpildjdb`), so the Extension ID is identical across all machines and users automatically!
 
-### Step 2: Install Local Native Host Bridge
+### Step 2: Install Local Native Host Bridge (One-Click)
 
 #### On Windows:
-Double-click `install_host.bat` inside `lindows_extension`, then press Enter.
+Double-click `install_host.bat` inside the `lindows_extension` folder. It will automatically detect Python and register the native bridge for Chrome, Brave, Edge, Chromium, and Vivaldi without requiring you to copy or paste IDs.
 
 #### On Linux:
 ```bash
@@ -61,8 +61,10 @@ cd lindows_extension
 chmod +x install_host.sh
 ./install_host.sh
 ```
+The installer automatically configures the bridge for all installed browsers.
 
 ### Step 3: Test the Connection
 1. Click the DualSync icon in your browser toolbar to open the popup.
 2. Click **"Test Bridge"**.
 3. The badge in the top right will turn green: **"Connected"**.
+

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DualSync Native Messaging Host Installer for Linux (Google Chrome, Brave, Chromium, Edge)
+# DualSync Native Messaging Host Installer for Linux (Google Chrome, Brave, Chromium, Edge, Vivaldi, Opera)
 
 set -e
 
@@ -14,15 +14,27 @@ fi
 
 chmod +x "$HOST_SCRIPT"
 
+FIXED_ID="dlgiaeggibjmhegpeakmgjckgpildjdb"
+LEGACY_ID="obkmhhkdmmbpjaiadpikanbjnfcoehah"
+
 echo "=== DualSync Native Host Installer (Linux) ==="
 echo ""
-echo "Please enter your DualSync Extension ID from chrome://extensions"
-echo "(Example: obkmhhkdmmbpjaiadpikanbjnfcoehah)"
-read -p "Extension ID: " EXT_ID
 
-if [ -z "$EXT_ID" ]; then
-    echo "❌ Error: Extension ID cannot be empty."
-    exit 1
+if [ -n "$1" ]; then
+    EXT_ID="$1"
+    echo "Using provided Extension ID: $EXT_ID"
+else
+    EXT_ID="$FIXED_ID"
+    echo "Using automated DualSync Extension ID: $EXT_ID"
+fi
+
+if [ "$EXT_ID" = "$FIXED_ID" ]; then
+    ALLOWED_ORIGINS="\"chrome-extension://$FIXED_ID/\",
+    \"chrome-extension://$LEGACY_ID/\""
+else
+    ALLOWED_ORIGINS="\"chrome-extension://$EXT_ID/\",
+    \"chrome-extension://$FIXED_ID/\",
+    \"chrome-extension://$LEGACY_ID/\""
 fi
 
 MANIFEST_CONTENT=$(cat <<EOF
@@ -32,7 +44,7 @@ MANIFEST_CONTENT=$(cat <<EOF
   "path": "$HOST_SCRIPT",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://$EXT_ID/"
+    $ALLOWED_ORIGINS
   ]
 }
 EOF
@@ -44,6 +56,8 @@ TARGET_DIRS=(
     "$HOME/.config/chromium/NativeMessagingHosts"
     "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
     "$HOME/.config/microsoft-edge/NativeMessagingHosts"
+    "$HOME/.config/vivaldi/NativeMessagingHosts"
+    "$HOME/.config/opera/NativeMessagingHosts"
 )
 
 INSTALLED_COUNT=0
@@ -66,4 +80,5 @@ fi
 
 echo ""
 echo "🎉 Native host registered successfully!"
+echo "Extension ID: $EXT_ID"
 echo "Now reload your extension in chrome://extensions and click 'Test Bridge' in the DualSync popup."
