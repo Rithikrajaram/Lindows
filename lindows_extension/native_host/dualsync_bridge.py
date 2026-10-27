@@ -12,7 +12,7 @@ import shutil
 import glob
 import subprocess
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 def get_message():
     """Read a message from Chrome via standard input (Native Messaging protocol)."""
@@ -35,7 +35,7 @@ def get_linux_downloads_path():
     return os.path.abspath(os.path.expanduser("~/Downloads"))
 
 def find_windows_partition_info():
-    """Discover Windows NTFS partition using lsblk on Linux."""
+    """Discover Windows NTFS partition using lsblk without triggering any passwords or mounts."""
     if sys.platform == "win32":
         return None
 
@@ -63,66 +63,33 @@ def find_windows_partition_info():
         pass
     return None
 
-def try_automount_windows():
-    """Attempt to mount unmounted Windows partition via udisksctl."""
-    part_info = find_windows_partition_info()
-    if not part_info or part_info.get("mounted"):
-        return part_info
-
-    dev_path = part_info.get("path")
-    if not dev_path:
-        return part_info
-
-    try:
-        res = subprocess.run(
-            ["udisksctl", "mount", "-b", dev_path],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if res.returncode == 0:
-            return find_windows_partition_info()
-        else:
-            stderr = res.stderr.strip()
-            part_info["mount_error"] = stderr
-            if "wrong fs type" in stderr or "bad superblock" in stderr or "is dirty" in stderr:
-                part_info["dirty"] = True
-    except Exception as e:
-        part_info["mount_error"] = str(e)
-
-    return part_info
-
 def detect_windows_download_path():
-    """Search for common dual-boot mounted Windows download directories or local Windows paths."""
+    """Search exclusively for currently mounted Windows download directories (NO mount or password commands)."""
     if sys.platform == "win32":
         return os.path.abspath(os.path.expanduser("~/Downloads"))
 
-    # Linux: Try auto-mounting if unmounted
-    try_automount_windows()
-
+    # Strictly read-only scan of mounted locations - NEVER trigger any mount or password commands
     candidates = [
-        # Dual-boot mount locations
         "/run/media/*/*/Users/*/Downloads",
         "/run/media/*/*/*/Users/*/Downloads",
         "/media/*/*/Users/*/Downloads",
+        "/media/*/Users/*/Downloads",
         "/mnt/*/Users/*/Downloads",
         "/mnt/c/Users/*/Downloads",
         "/run/media/rithik/Windows/Users/Asus/Downloads"
     ]
+
+    # 1. Look for user-specific Downloads folder (avoid Default / Public)
     for pattern in candidates:
-        matches = glob.glob(pattern)
-        for match in matches:
-            # Avoid matching inside Linux home directory
+        for match in glob.glob(pattern):
             if os.path.isdir(match) and not match.startswith(os.path.expanduser("~")):
-                # Avoid Default / Public accounts if a specific user exists
                 if "/Users/Default/" in match or "/Users/Public/" in match:
                     continue
                 return os.path.abspath(match)
 
-    # Secondary scan if only Default/Public matched
+    # 2. Secondary fallback for any mounted Windows Users download directory
     for pattern in candidates:
-        matches = glob.glob(pattern)
-        for match in matches:
+        for match in glob.glob(pattern):
             if os.path.isdir(match) and not match.startswith(os.path.expanduser("~")):
                 return os.path.abspath(match)
 
@@ -136,7 +103,7 @@ def handle_ping(payload):
     part_info = find_windows_partition_info()
 
     # Target folder checks
-    target_exists = os.path.exists(target_dir) if target_dir else False
+    target_exists = os.path.isdir(target_dir) if target_dir else False
     target_writable = os.access(target_dir, os.W_OK) if target_exists else False
 
     is_same_as_linux = False
@@ -156,23 +123,14 @@ def handle_ping(payload):
     }
 
     if is_same_as_linux:
-        response["warning"] = (
-            "Target folder is set to your Linux Downloads folder instead of Windows! "
-            "Please select your Windows partition path."
-        )
-    elif part_info and not part_info.get("mounted"):
-        if part_info.get("dirty"):
-            response["warning"] = (
-                "Windows partition is locked because Windows Fast Startup is enabled. "
-                "In Windows, disable Fast Startup (run 'powercfg /h off' in Admin CMD) or restart Windows to allow write access."
-            )
+        response["warning"] = "Target is set to Linux Downloads! Please set to your Windows partition."
+    elif not target_exists:
+        if part_info and not part_info.get("mounted"):
+            response["warning"] = f"Windows drive is not mounted. Click '{part_info.get('label') or 'Windows'}' in your file manager to mount it."
         else:
-            response["warning"] = f"Windows partition is not mounted. Run: udisksctl mount -b {part_info.get('path')}"
-    elif target_exists and not target_writable:
-        response["warning"] = (
-            "Windows partition is mounted read-only. "
-            "Disable Fast Startup in Windows (run 'powercfg /h off' in Admin CMD) to enable writing."
-        )
+            response["warning"] = "Target folder does not exist. Please mount your Windows partition."
+    elif not target_writable:
+        response["warning"] = "Windows partition is mounted read-only (Windows Fast Startup is locked)."
 
     return response
 
@@ -184,59 +142,64 @@ def handle_sync_file(payload):
         return {"success": False, "error": f"Source file does not exist: {file_path}"}
 
     if not target_dir:
-        return {"success": False, "error": "Target directory is not specified"}
+        return {"success": False, "error": "Target directory is not specified."}
+
+    abs_source = os.path.abspath(os.path.expanduser(file_path))
+    abs_target = os.path.abspath(os.path.expanduser(target_dir))
+    filename = os.path.basename(abs_source)
+    dest_path = os.path.join(abs_target, filename)
+
+    # 1. Guard against source and target destination being identical
+    if abs_source == dest_path:
+        return {
+            "success": False,
+            "error": (
+                f"Source and target destination are the same file ({abs_source})!\n"
+                "Target is currently pointing to your Linux Downloads folder instead of Windows.\n"
+                "Please configure your Windows drive path in Settings."
+            )
+        }
+
+    if os.path.exists(dest_path) and os.path.samefile(abs_source, dest_path):
+        return {
+            "success": False,
+            "error": "Destination file points to the same file as source. Please select your Windows drive."
+        }
+
+    # 2. CRITICAL: Check if target folder exists before attempting to write or create directories.
+    # Never run os.makedirs on an unmounted root-owned directory (/run/media/rithik/...) as that causes Permission Denied!
+    if not os.path.isdir(abs_target):
+        return {
+            "success": False,
+            "error": (
+                f"Windows destination folder is not mounted or does not exist:\n{abs_target}\n\n"
+                "Please mount your Windows partition first by clicking on it in your file manager (Files / Dolphin / Nautilus)."
+            )
+        }
+
+    # 3. Check write permissions
+    if not os.access(abs_target, os.W_OK):
+        return {
+            "success": False,
+            "error": (
+                f"Cannot write to Windows folder (Permission Denied / Read-Only):\n{abs_target}\n\n"
+                "Your Windows partition is mounted in read-only mode.\n"
+                "To fix this, disable Fast Startup in Windows (run 'powercfg /h off' in Administrator Command Prompt)."
+            )
+        }
 
     try:
-        abs_source = os.path.abspath(os.path.expanduser(file_path))
-        abs_target = os.path.abspath(os.path.expanduser(target_dir))
-        filename = os.path.basename(abs_source)
-        dest_path = os.path.join(abs_target, filename)
-
-        # 1. Guard against source and target destination being identical
-        if abs_source == dest_path:
-            return {
-                "success": False,
-                "error": (
-                    f"Target destination is identical to source file ({abs_source})!\n"
-                    "Your target folder is configured to your Linux Downloads folder instead of your Windows drive.\n"
-                    "Please set your Windows path (e.g. /run/media/rithik/Windows/Users/Asus/Downloads) in Settings."
-                )
-            }
-
-        # 2. Check if destination file already exists and is the same inode
-        if os.path.exists(dest_path) and os.path.samefile(abs_source, dest_path):
-            return {
-                "success": False,
-                "error": (
-                    f"Destination '{dest_path}' refers to the same file as source.\n"
-                    "Please configure a valid Windows partition destination in DualSync settings."
-                )
-            }
-
-        # 3. Check target directory writability
-        if os.path.exists(abs_target) and not os.access(abs_target, os.W_OK):
-            return {
-                "success": False,
-                "error": (
-                    f"Target folder '{abs_target}' is read-only.\n"
-                    "Your Windows partition is mounted in read-only mode (likely because Windows Fast Startup is enabled).\n"
-                    "To fix: Boot into Windows and run 'powercfg /h off' in Admin Command Prompt."
-                )
-            }
-
-        os.makedirs(abs_target, exist_ok=True)
         shutil.copy2(abs_source, dest_path)
-
         return {
             "success": True,
             "destPath": dest_path
         }
-    except shutil.SameFileError:
+    except PermissionError as pe:
         return {
             "success": False,
             "error": (
-                "Source and destination files are identical.\n"
-                "Please configure a valid Windows partition destination in DualSync settings."
+                f"Permission Denied while copying to '{dest_path}': {pe}\n"
+                "Ensure your Windows drive is mounted with write permissions."
             )
         }
     except Exception as exc:
