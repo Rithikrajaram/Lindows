@@ -62,8 +62,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Load settings from chrome.storage.local
 async function loadSettings() {
   chrome.storage.local.get(DEFAULT_CONFIG, (items) => {
-    // If not set or invalid placeholder
-    if (!items.targetFolder) {
+    // If not set or invalid placeholder or erroneously pointing to Linux Downloads folder
+    if (!items.targetFolder || items.targetFolder === "/home/rithik/Downloads" || (items.targetFolder.startsWith("/home/") && !items.targetFolder.includes("Windows"))) {
       items.targetFolder = DEFAULT_CONFIG.targetFolder;
       chrome.storage.local.set({ targetFolder: items.targetFolder });
     }
@@ -89,10 +89,18 @@ chips.forEach((chip) => {
 
 // Save settings handler
 saveBtn.addEventListener("click", () => {
+  const chosenPath = targetFolderInput.value.trim() || DEFAULT_CONFIG.targetFolder;
+
+  // Guard against setting target to Linux Downloads folder
+  if (chosenPath === "/home/rithik/Downloads" || (chosenPath.startsWith("/home/") && !chosenPath.includes("Windows"))) {
+    showFeedback("error", "Invalid Target Folder", "Target folder cannot be your Linux Downloads folder. Please select your Windows partition (e.g. /run/media/rithik/Windows/Users/Asus/Downloads).");
+    return;
+  }
+
   const settings = {
     autoSync: autoSyncToggle.checked,
     promptBeforeSync: promptToggle.checked,
-    targetFolder: targetFolderInput.value.trim() || DEFAULT_CONFIG.targetFolder
+    targetFolder: chosenPath
   };
 
   chrome.storage.local.set(settings, () => {
@@ -153,14 +161,16 @@ async function checkBridgeStatus(interactive = false) {
         if (response && response.status === "ok") {
           setBridgePill("connected", "Connected");
 
-          // Auto-update if previous target was placeholder or not found
-          if (response.detectedPath && (targetFolderInput.value.includes("/mnt/windows") || targetFolderInput.value.includes("Default") || !response.targetExists)) {
+          // Auto-update only if detectedPath is a legitimate Windows path (not Linux home)
+          if (response.detectedPath && !response.detectedPath.startsWith("/home/")) {
             targetFolderInput.value = response.detectedPath;
             chrome.storage.local.set({ targetFolder: response.detectedPath });
           }
 
-          if (interactive) {
-            let detail = `Python Bridge v${response.version || "1.0"} active.`;
+          if (response.warning) {
+            showFeedback("error", "Partition Notice", response.warning);
+          } else if (interactive) {
+            let detail = `Python Bridge v${response.version || "1.1"} active.`;
             if (response.targetExists && response.targetWritable) {
               detail += ` Windows folder verified & writable!`;
             } else if (response.detectedPath) {
@@ -208,11 +218,11 @@ function showFeedback(type, title, msg) {
   feedbackMessage.textContent = msg;
   feedbackCard.classList.remove("hidden");
 
-  // Auto hide after 5 seconds if success
+  // Auto hide after 8 seconds if success/info
   if (type === "success" || type === "info") {
     setTimeout(() => {
       feedbackCard.classList.add("hidden");
-    }, 5000);
+    }, 8000);
   }
 }
 

@@ -46,10 +46,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Load configured targetFolder fallback
-  if (!targetFolder) {
+  // Load configured targetFolder fallback & sanitize
+  if (!targetFolder || targetFolder === "/home/rithik/Downloads" || (targetFolder.startsWith("/home/") && !targetFolder.includes("Windows"))) {
     const config = await chrome.storage.local.get({ targetFolder: DEFAULT_TARGET });
     targetFolder = config.targetFolder || DEFAULT_TARGET;
+    if (targetFolder === "/home/rithik/Downloads" || (targetFolder.startsWith("/home/") && !targetFolder.includes("Windows"))) {
+      targetFolder = DEFAULT_TARGET;
+      chrome.storage.local.set({ targetFolder: DEFAULT_TARGET });
+    }
   }
 
   // Fallback filename extraction
@@ -64,8 +68,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   fileSourceEl.textContent = filePath ? `Source: ${filePath}` : "Source: Browser Downloads";
   targetFolderDisplay.textContent = targetFolder;
 
-  // Auto focus the Sync button
-  syncBtn.focus();
+  // Check if source folder and destination target are identical
+  const sourceDir = filePath ? filePath.replace(/[/\\][^/\\]+$/, "") : "";
+  const normalizedTarget = targetFolder ? targetFolder.replace(/[/\\]+$/, "") : "";
+  const isIdentical = sourceDir && normalizedTarget && (sourceDir === normalizedTarget);
+
+  if (isIdentical || (targetFolder.startsWith("/home/") && !targetFolder.includes("Windows"))) {
+    targetFolderDisplay.innerHTML = `<span style="color:#f87171;font-weight:600;">⚠️ Invalid: Points to Linux Downloads</span><br><span style="font-size:11px;color:#94a3b8;">${targetFolder}</span>`;
+    syncBtn.disabled = true;
+    syncBtnText.textContent = "Configure Windows Drive in Settings";
+    showStatus(
+      "error",
+      "Windows Partition Not Configured",
+      "Target is currently pointing to your Linux Downloads folder. Open the DualSync extension icon in your browser to set your Windows partition (e.g. /run/media/rithik/Windows/Users/Asus/Downloads)."
+    );
+  } else {
+    // Auto focus the Sync button
+    syncBtn.focus();
+  }
 });
 
 // Sync Button Click
@@ -80,7 +100,7 @@ skipBtn.addEventListener("click", () => {
 
 // Keyboard shortcuts: Enter to sync, Escape to skip
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
+  if (e.key === "Enter" && !syncBtn.disabled) {
     e.preventDefault();
     handleSync();
   } else if (e.key === "Escape") {

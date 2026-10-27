@@ -2,6 +2,7 @@
 // Listens for completed downloads and delegates syncing to Native Messaging Host
 
 const NATIVE_HOST_NAME = "com.dualsync.bridge";
+const DEFAULT_WINDOWS_TARGET = "/run/media/rithik/Windows/Users/Asus/Downloads";
 
 // Helper to extract filename from full path
 function getBaseName(filePath) {
@@ -75,11 +76,12 @@ chrome.downloads.onChanged.addListener(async (delta) => {
       {
         autoSync: true,
         promptBeforeSync: true,
-        targetFolder: "/run/media/rithik/Windows/Users/Asus/Downloads"
+        targetFolder: DEFAULT_WINDOWS_TARGET
       },
       (config) => {
-        if (!config.targetFolder) {
-          config.targetFolder = "/run/media/rithik/Windows/Users/Asus/Downloads";
+        // Sanitize targetFolder if unset or accidentally pointing to Linux Downloads
+        if (!config.targetFolder || config.targetFolder === "/home/rithik/Downloads" || (config.targetFolder.startsWith("/home/") && !config.targetFolder.includes("Windows"))) {
+          config.targetFolder = DEFAULT_WINDOWS_TARGET;
           chrome.storage.local.set({ targetFolder: config.targetFolder });
         }
 
@@ -101,7 +103,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   }
 });
 
-// Prompt user via interactive popup window AND Chrome notification
+// Prompt user via interactive popup window and notification
 async function askUserToSync(downloadId, filePath, fileName, targetFolder) {
   const syncId = String(downloadId);
   const notificationId = `dualsync_prompt_${syncId}_${Date.now()}`;
@@ -129,7 +131,7 @@ async function askUserToSync(downloadId, filePath, fileName, targetFolder) {
 // Open clean standalone popup window
 function openPromptWindow(downloadId, filePath, fileName, targetFolder) {
   const width = 480;
-  const height = 340;
+  const height = 350;
 
   const promptUrl = chrome.runtime.getURL(
     `prompt.html?id=${encodeURIComponent(downloadId)}&file=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}&target=${encodeURIComponent(targetFolder)}`
@@ -142,7 +144,6 @@ function openPromptWindow(downloadId, filePath, fileName, targetFolder) {
     if (currentWin && currentWin.left !== undefined && currentWin.width !== undefined) {
       left = Math.round(currentWin.left + (currentWin.width - width) / 2);
       top = Math.round(currentWin.top + (currentWin.height - height) / 2);
-      // Ensure on-screen
       if (left < 0) left = 100;
       if (top < 0) top = 100;
     }
@@ -188,7 +189,6 @@ function sendSystemNotification(notificationId, fileName, targetFolder) {
   chrome.notifications.create(notificationId, optionsWithButtons, () => {
     if (chrome.runtime.lastError) {
       console.warn("[DualSync] Rich notification failed, trying basic:", chrome.runtime.lastError.message);
-      // Fallback for notification daemons that reject custom buttons (e.g. some Linux distros)
       chrome.notifications.create(notificationId, {
         type: "basic",
         iconUrl: iconUrl,
@@ -261,10 +261,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "test_prompt") {
     // Simulate a download completion prompt for user testing
     const sampleDownloadId = `test_${Date.now()}`;
-    const sampleFile = "Sample_Downloaded_Document.pdf";
-    const samplePath = `C:\\Users\\Default\\Downloads\\${sampleFile}`;
+    const sampleFile = "Sample_Document.pdf";
+    const samplePath = `/home/rithik/Downloads/${sampleFile}`;
 
-    chrome.storage.local.get({ targetFolder: "/run/media/rithik/Windows/Users/Asus/Downloads" }, (config) => {
+    chrome.storage.local.get({ targetFolder: DEFAULT_WINDOWS_TARGET }, (config) => {
       askUserToSync(sampleDownloadId, samplePath, sampleFile, config.targetFolder);
       sendResponse({ success: true });
     });
@@ -274,6 +274,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Execute the file sync using Chrome Native Messaging Host
 function executeFileSync(filePath, targetFolder, fileName, callback = null) {
+  const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
+
+  // Safety check: Don't attempt copying if source and target are the same folder
+  const sourceDir = filePath ? filePath.replace(/[/\\][^/\\]+$/, "") : "";
+  const normalizedTarget = targetFolder ? targetFolder.replace(/[/\\]+$/, "") : "";
+  if (sourceDir && normalizedTarget && sourceDir === normalizedTarget) {
+    const errorMsg = "Target destination is set to Linux Downloads, not your Windows drive.";
+    console.warn("[DualSync]", errorMsg);
+
+    chrome.notifications.create(`dualsync_err_${Date.now()}`, {
+      type: "basic",
+      iconUrl: iconUrl,
+      title: "DualSync: Configuration Error",
+      message: `${errorMsg}\nPlease open DualSync Settings and select your Windows drive.`
+    });
+
+    if (callback) callback({ success: false, error: errorMsg });
+    return;
+  }
+
   const payload = {
     action: "sync_file",
     filePath: filePath,
@@ -283,8 +303,6 @@ function executeFileSync(filePath, targetFolder, fileName, callback = null) {
   console.log("[DualSync] Sending payload to native host:", payload);
 
   chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, payload, (response) => {
-    const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
-
     if (chrome.runtime.lastError) {
       const errorMsg = chrome.runtime.lastError.message;
       console.error("[DualSync] Native messaging error:", errorMsg);
@@ -293,7 +311,7 @@ function executeFileSync(filePath, targetFolder, fileName, callback = null) {
         type: "basic",
         iconUrl: iconUrl,
         title: "DualSync: Sync Failed",
-        message: `Native host error: ${errorMsg}\nPlease check that the native host is installed.`
+        message: `Native host error: ${errorMsg}\nPlease verify that the native host is installed.`
       });
 
       if (callback) callback({ success: false, error: errorMsg });
