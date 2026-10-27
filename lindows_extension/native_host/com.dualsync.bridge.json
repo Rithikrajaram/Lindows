@@ -1,0 +1,9 @@
+{
+  "name": "com.dualsync.bridge",
+  "description": "DualSync Native Messaging Host",
+  "path": "d:\\Lindows-main\\Lindows-main\\lindows_extension\\native_host\\dualsync_bridge.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://obkmhhkdmmbpjaiadpikanbjnfcoehah/"
+  ]
+}
