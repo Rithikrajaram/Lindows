@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DualSync - Sync Download?</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="prompt.css">
+</head>
+<body class="prompt-body">
+  <div class="prompt-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-area">
+        <div class="icon-wrap pulse-anim">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <div>
+          <h1>Download Completed</h1>
+          <p class="subtitle">DualSync Partition Bridge</p>
+        </div>
+      </div>
+      <div class="status-pill status-connected">
+        <span class="status-dot"></span>
+        <span>Ready</span>
+      </div>
+    </header>
+
+    <!-- Question Banner -->
+    <div class="prompt-question">
+      <span>Sync this downloaded file to your Windows drive?</span>
+    </div>
+
+    <!-- File Information Card -->
+    <div class="card file-card">
+      <div class="file-icon-wrap">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="12" y1="18" x2="12" y2="12"></line>
+          <line x1="9" y1="15" x2="15" y2="15"></line>
+        </svg>
+      </div>
+      <div class="file-details">
+        <div id="file-name" class="file-name" title="File name">Loading...</div>
+        <div id="file-source" class="file-path-subtle" title="Source path"></div>
+      </div>
+    </div>
+
+    <!-- Destination Target -->
+    <div class="target-section">
+      <div class="target-header">
+        <span class="target-label">Target Destination:</span>
+      </div>
+      <div class="target-path-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span id="target-folder-display" class="target-folder-text">Loading target folder...</span>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="prompt-options">
+      <label class="checkbox-container">
+        <input type="checkbox" id="remember-choice">
+        <span class="checkmark"></span>
+        <span class="checkbox-label">Always auto-sync without asking again</span>
+      </label>
+    </div>
+
+    <!-- Live Status / Feedback -->
+    <div id="prompt-feedback" class="feedback-card hidden">
+      <div id="feedback-icon" class="feedback-icon"></div>
+      <div class="feedback-body">
+        <div id="feedback-title" class="feedback-title"></div>
+        <div id="feedback-message" class="feedback-message"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="prompt-actions">
+      <button id="skip-btn" class="btn btn-secondary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        Skip (Esc)
+      </button>
+      <button id="sync-btn" class="btn btn-primary">
+        <svg id="sync-btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span id="sync-btn-text">Sync to Windows (Enter)</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="prompt.js"></script>
+</body>
+</html>

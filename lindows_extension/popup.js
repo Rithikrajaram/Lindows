@@ -9,6 +9,7 @@ const promptToggle = document.getElementById("prompt-toggle");
 const targetFolderInput = document.getElementById("target-folder");
 const saveBtn = document.getElementById("save-btn");
 const testBridgeBtn = document.getElementById("test-bridge-btn");
+const testPromptBtn = document.getElementById("test-prompt-btn");
 const bridgeStatusPill = document.getElementById("bridge-status-pill");
 const bridgeStatusText = document.getElementById("bridge-status-text");
 const feedbackCard = document.getElementById("feedback-card");
@@ -114,6 +115,15 @@ promptToggle.addEventListener("change", () => {
 testBridgeBtn.addEventListener("click", async () => {
   await checkBridgeStatus(true);
 });
+
+// Test Prompt Pop-up
+if (testPromptBtn) {
+  testPromptBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "test_prompt" }, () => {
+      showFeedback("info", "Pop-up Window Launched", "A test download prompt window has been opened.");
+    });
+  });
+}
 
 // Bridge status verification via chrome.runtime.sendNativeMessage
 async function checkBridgeStatus(interactive = false) {

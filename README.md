@@ -31,6 +31,9 @@ dualsync/
     ├── popup.html         # Settings & bridge test UI
     ├── popup.css          # Glassmorphic UI styling
     ├── popup.js           # Settings controller & native bridge caller
+    ├── prompt.html        # Interactive pop-up dialog for download sync
+    ├── prompt.css         # Styling for download confirmation dialog
+    ├── prompt.js          # Controller for confirmation popup & shortcuts
     ├── install_host.bat   # Windows Native Host installer
     ├── install_host.sh    # Linux Native Host installer
     ├── icons/             # Icons (16, 48, 128)
