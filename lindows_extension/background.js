@@ -3,7 +3,7 @@
 
 const NATIVE_HOST_NAME = "com.dualsync.bridge";
 const DEFAULT_LINUX_WINDOWS_TARGET = "/run/media/rithik/Windows/Users/Asus/Downloads";
-const DEFAULT_WIN_LINUX_TARGET = "\\\\wsl.localhost\\Ubuntu\\home\\user\\Downloads";
+const DEFAULT_WIN_LINUX_TARGET = "/home/rithik/Downloads";
 
 // Cache platform
 let cachedOS = null;
@@ -21,7 +21,7 @@ function getDefaultTarget() {
 
 // Validate target folder:
 // On Linux -> Must be Windows drive (never Linux /home/)
-// On Windows -> Must be Linux/WSL drive (never Windows C:\)
+// On Windows -> Must be Linux drive (/home/rithik/Downloads, never Windows User Downloads)
 function isValidTargetForOS(target) {
   if (!target || typeof target !== "string") return false;
   const clean = target.trim();
@@ -41,16 +41,12 @@ function isValidTargetForOS(target) {
       clean.startsWith("/mnt/")
     );
   } else {
-    // Windows OS: Target must be Linux / WSL
-    if (/^[A-Za-z]:\\/.test(clean) || clean.includes("\\Users\\")) {
+    // Windows OS: Target must be Linux (/home/rithik/Downloads, WSL, etc.)
+    // Cannot be source Windows user downloads folder
+    if (clean.toLowerCase().includes("\\users\\asus\\downloads") || clean.toLowerCase().includes("/users/asus/downloads")) {
       return false;
     }
-    return (
-      clean.startsWith("\\\\wsl.localhost") ||
-      clean.startsWith("\\\\wsl$") ||
-      clean.toLowerCase().includes("ext4") ||
-      clean.toLowerCase().includes("linux")
-    );
+    return true;
   }
 }
 
@@ -130,9 +126,7 @@ chrome.downloads.onChanged.addListener(async (delta) => {
         targetFolder: defaultTarget
       },
       (config) => {
-        // Enforce constraint:
-        // On Linux: Target MUST be Windows only.
-        // On Windows: Target MUST be Linux only.
+        // Enforce constraint
         if (!isValidTargetForOS(config.targetFolder)) {
           config.targetFolder = defaultTarget;
           chrome.storage.local.set({ targetFolder: config.targetFolder });
@@ -225,7 +219,7 @@ function openPromptWindow(downloadId, filePath, fileName, targetFolder) {
 // Display Chrome Notification with buttons
 function sendSystemNotification(notificationId, fileName, targetFolder) {
   const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
-  const targetOS = isWindows() ? "Linux Drive (WSL)" : "Windows Drive";
+  const targetOS = isWindows() ? "Linux (Arch Linux)" : "Windows Drive";
 
   const optionsWithButtons = {
     type: "basic",
@@ -314,7 +308,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const sampleDownloadId = `test_${Date.now()}`;
     const sampleFile = "Sample_Document.pdf";
     const samplePath = isWindows()
-      ? `C:\\Users\\Default\\Downloads\\${sampleFile}`
+      ? `C:\\Users\\Asus\\Downloads\\${sampleFile}`
       : `/home/rithik/Downloads/${sampleFile}`;
     const defaultTarget = getDefaultTarget();
 
@@ -333,12 +327,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Execute the file sync using Chrome Native Messaging Host
 function executeFileSync(filePath, targetFolder, fileName, callback = null) {
   const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
-  const targetOS = isWindows() ? "Linux" : "Windows";
+  const targetOS = isWindows() ? "Linux (Arch)" : "Windows";
 
   // Strict constraint: Validate target folder matches target OS
   if (!isValidTargetForOS(targetFolder)) {
     const errorMsg = isWindows()
-      ? "Target destination must be on your Linux partition or WSL, not Windows."
+      ? "Target destination must be your Linux folder (e.g. /home/rithik/Downloads)."
       : "Target destination must be on your Windows drive, not Linux.";
     console.warn("[DualSync]", errorMsg);
 

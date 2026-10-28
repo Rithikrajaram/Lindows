@@ -1,5 +1,5 @@
 // DualSync Popup Controller
-// Linux <-> Windows Partition Sync
+// Linux (Arch Linux) <-> Windows Partition Sync
 
 const NATIVE_HOST_NAME = "com.dualsync.bridge";
 
@@ -50,13 +50,13 @@ const viewGuideLink = document.getElementById("view-guide-link");
 // Default configurations
 function getDefaultTarget(isWin) {
   return isWin
-    ? "\\\\wsl.localhost\\Ubuntu\\home\\user\\Downloads"
+    ? "/home/rithik/Downloads"
     : "/run/media/rithik/Windows/Users/Asus/Downloads";
 }
 
 // Target Validation Constraint:
 // In Linux -> Target MUST be Windows drive only. No Linux paths allowed.
-// In Windows -> Target MUST be Linux/WSL drive only. No Windows paths allowed.
+// In Windows -> Target MUST be Linux destination (/home/rithik/Downloads, WSL, or ext4).
 function validateTargetFolder(path, isWin) {
   if (!path || !path.trim()) {
     return { valid: false, reason: "Target folder cannot be empty." };
@@ -88,23 +88,11 @@ function validateTargetFolder(path, isWin) {
     }
     return { valid: true };
   } else {
-    // Windows Environment: Must target Linux / WSL
-    if (/^[A-Za-z]:\\/.test(cleanPath) || cleanPath.includes("\\Users\\")) {
+    // Windows Environment: Must target Linux
+    if (cleanPath.toLowerCase().includes("\\users\\asus\\downloads") || cleanPath.toLowerCase().includes("/users/asus/downloads")) {
       return {
         valid: false,
-        reason: "In Windows, the sync target must be a Linux partition or WSL folder (e.g. \\\\wsl.localhost\\Ubuntu\\home\\...).\nWindows folders cannot be selected."
-      };
-    }
-    const looksLikeLinux = (
-      cleanPath.startsWith("\\\\wsl.localhost") ||
-      cleanPath.startsWith("\\\\wsl$") ||
-      cleanPath.toLowerCase().includes("ext4") ||
-      cleanPath.toLowerCase().includes("linux")
-    );
-    if (!looksLikeLinux) {
-      return {
-        valid: false,
-        reason: "In Windows, target folder must be on your Linux partition or WSL."
+        reason: "Target cannot be your Windows Downloads folder. Target must be your Linux folder (e.g. /home/rithik/Downloads)."
       };
     }
     return { valid: true };
@@ -116,17 +104,17 @@ function applyPlatformUI(isWin) {
   if (isWin) {
     if (subtitleText) subtitleText.textContent = "Windows → Linux Drive Sync";
     if (autoSyncTitle) autoSyncTitle.textContent = "Auto-Sync to Linux";
-    if (autoSyncDesc) autoSyncDesc.textContent = "Automatically mirror Windows downloads to your Linux partition / WSL";
+    if (autoSyncDesc) autoSyncDesc.textContent = "Automatically mirror Windows downloads to your Arch Linux folder";
     if (targetLabelText) targetLabelText.textContent = "Target Linux Download Folder";
     if (targetBadge) {
       targetBadge.className = "os-badge os-badge-linux";
-      targetBadge.textContent = "🐧 Linux / WSL Only";
+      targetBadge.textContent = "🐧 Arch Linux Target";
     }
     if (targetTooltip) {
-      targetTooltip.title = "In Windows, only Linux partition or WSL download folders are choosable. Windows folders are not allowed.";
+      targetTooltip.title = "In Windows, downloads will be synced to your Linux folder (/home/rithik/Downloads).";
     }
     if (targetFolderInput) {
-      targetFolderInput.placeholder = "\\\\wsl.localhost\\Ubuntu\\home\\user\\Downloads";
+      targetFolderInput.placeholder = "/home/rithik/Downloads";
     }
     if (mountBar) {
       mountBar.style.display = "none";
@@ -198,7 +186,7 @@ async function loadSettings() {
       // Validate stored target
       const validation = validateTargetFolder(items.targetFolder, isWindowsOS);
       let targetPath = items.targetFolder;
-      if (!validation.valid) {
+      if (!validation.valid || targetPath.includes("Ubuntu")) {
         targetPath = defaultTarget;
         chrome.storage.local.set({ targetFolder: targetPath });
       }
@@ -221,7 +209,7 @@ function renderDetectedChips(paths) {
     const emptySpan = document.createElement("span");
     emptySpan.style.color = "var(--text-muted)";
     emptySpan.style.fontSize = "11px";
-    emptySpan.textContent = isWindowsOS ? "No WSL distros detected" : "No Windows download folders detected";
+    emptySpan.textContent = isWindowsOS ? "Default: /home/rithik/Downloads" : "No Windows download folders detected";
     presetChipsList.appendChild(emptySpan);
     return;
   }
@@ -246,7 +234,7 @@ function renderDetectedChips(paths) {
       document.querySelectorAll(".chip").forEach(c => c.classList.remove("chip-active"));
       chipBtn.classList.add("chip-active");
 
-      showFeedback("success", "Target Selected", `Folder locked to: ${item.label}`);
+      showFeedback("success", "Target Selected", `Folder set to: ${item.label}`);
     });
 
     presetChipsList.appendChild(chipBtn);
@@ -346,10 +334,10 @@ async function checkBridgeStatus(interactive = false) {
             renderDetectedChips(response.detectedPaths);
           }
 
-          // Auto-select valid detected target if empty or pointing to current OS
+          // Auto-select valid detected target if empty or pointing to wrong OS
           if (response.detectedPath) {
             const currentValidation = validateTargetFolder(targetFolderInput.value, isWindowsOS);
-            if (!currentValidation.valid || !targetFolderInput.value.trim()) {
+            if (!currentValidation.valid || !targetFolderInput.value.trim() || targetFolderInput.value.includes("Ubuntu")) {
               targetFolderInput.value = response.detectedPath;
               chrome.storage.local.set({ targetFolder: response.detectedPath });
             }
@@ -359,7 +347,7 @@ async function checkBridgeStatus(interactive = false) {
           if (response.warning) {
             showFeedback("error", "Partition Notice", response.warning);
           } else if (interactive) {
-            let detail = `Native Host v${response.version || "1.3"} active. Target verified & writable!`;
+            let detail = `Native Host v${response.version || "1.4"} active. Target verified & writable!`;
             showFeedback("success", "Bridge Connected!", detail);
           }
         } else {
@@ -398,7 +386,7 @@ saveBtn.addEventListener("click", () => {
   };
 
   chrome.storage.local.set(settings, () => {
-    showFeedback("success", "Settings Saved", `Target folder locked to: ${chosenPath}`);
+    showFeedback("success", "Settings Saved", `Target folder set to: ${chosenPath}`);
     chrome.runtime.sendMessage({ action: "settings_updated", settings });
     checkBridgeStatus(false);
   });

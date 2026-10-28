@@ -1,5 +1,5 @@
 // DualSync Interactive Download Prompt Controller
-// Linux <-> Windows Partition Sync
+// Linux (Arch Linux) <-> Windows Partition Sync
 
 const isWindowsOS = typeof navigator !== "undefined" && (
   navigator.platform?.includes("Win") ||
@@ -7,7 +7,7 @@ const isWindowsOS = typeof navigator !== "undefined" && (
 );
 
 const DEFAULT_TARGET = isWindowsOS
-  ? "\\\\wsl.localhost\\Ubuntu\\home\\user\\Downloads"
+  ? "/home/rithik/Downloads"
   : "/run/media/rithik/Windows/Users/Asus/Downloads";
 
 // DOM Elements
@@ -68,23 +68,11 @@ function validateTargetForPlatform(target, isWin) {
     }
     return { valid: true };
   } else {
-    // On Windows: Target MUST be Linux / WSL
-    if (/^[A-Za-z]:\\/.test(clean) || clean.includes("\\Users\\")) {
+    // On Windows: Target MUST be Linux (/home/rithik/Downloads, WSL, or external drive)
+    if (clean.toLowerCase().includes("\\users\\asus\\downloads") || clean.toLowerCase().includes("/users/asus/downloads")) {
       return {
         valid: false,
-        reason: "In Windows, target folder must be on your Linux partition or WSL. Windows folders are not allowed."
-      };
-    }
-    const isLinux = (
-      clean.startsWith("\\\\wsl.localhost") ||
-      clean.startsWith("\\\\wsl$") ||
-      clean.toLowerCase().includes("ext4") ||
-      clean.toLowerCase().includes("linux")
-    );
-    if (!isLinux) {
-      return {
-        valid: false,
-        reason: "In Windows, target must point to your Linux partition or WSL distro."
+        reason: "Target cannot be your Windows Downloads folder. Target must be your Linux folder (e.g. /home/rithik/Downloads)."
       };
     }
     return { valid: true };
@@ -95,8 +83,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Update UI text according to current OS
   if (isWindowsOS) {
     if (promptSubtitle) promptSubtitle.textContent = "Windows → Linux Drive Sync";
-    if (promptQuestionText) promptQuestionText.textContent = "Sync this downloaded file to your Linux drive (WSL / ext4)?";
-    if (targetLabelEl) targetLabelEl.textContent = "Linux Target Destination (WSL):";
+    if (promptQuestionText) promptQuestionText.textContent = "Sync this downloaded file to your Arch Linux folder?";
+    if (targetLabelEl) targetLabelEl.textContent = "Linux Target Destination (Arch Linux):";
     if (syncBtnText) syncBtnText.textContent = "Sync to Linux (Enter)";
   } else {
     if (promptSubtitle) promptSubtitle.textContent = "Linux → Windows Drive Sync";
@@ -123,9 +111,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load configured targetFolder fallback & sanitize
   const config = await chrome.storage.local.get({ targetFolder: DEFAULT_TARGET });
-  if (!targetFolder || !validateTargetForPlatform(targetFolder, isWindowsOS).valid) {
+  if (!targetFolder || !validateTargetForPlatform(targetFolder, isWindowsOS).valid || targetFolder.includes("Ubuntu")) {
     targetFolder = config.targetFolder || DEFAULT_TARGET;
-    if (!validateTargetForPlatform(targetFolder, isWindowsOS).valid) {
+    if (!validateTargetForPlatform(targetFolder, isWindowsOS).valid || targetFolder.includes("Ubuntu")) {
       targetFolder = DEFAULT_TARGET;
       chrome.storage.local.set({ targetFolder: DEFAULT_TARGET });
     }
@@ -214,7 +202,7 @@ async function handleSync() {
       }
 
       if (response && response.success) {
-        const destOS = isWindowsOS ? "Linux" : "Windows";
+        const destOS = isWindowsOS ? "Arch Linux" : "Windows";
         showStatus("success", "Sync Complete!", `"${fileName}" copied to ${destOS}.`);
         syncBtnText.textContent = "✓ Synced!";
         setTimeout(() => {

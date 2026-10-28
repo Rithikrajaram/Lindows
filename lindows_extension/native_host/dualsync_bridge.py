@@ -2,7 +2,7 @@
 """
 DualSync Native Messaging Host
 Bridges Chrome/Brave/Edge Extension to the local OS filesystem for syncing downloads
-between Linux and Windows partitions in dual-boot setups.
+between Linux (Arch Linux) and Windows partitions in dual-boot setups.
 """
 
 import sys
@@ -13,7 +13,7 @@ import shutil
 import glob
 import subprocess
 
-VERSION = "1.3"
+VERSION = "1.4"
 PLATFORM = "windows" if sys.platform == "win32" else "linux"
 
 def get_message():
@@ -107,8 +107,8 @@ def find_windows_partition_info():
 
 def detect_windows_download_paths(mountpoint=None):
     """
-    Search exclusively for valid Windows user download directories.
-    Strictly excludes any local Linux directories.
+    Search exclusively for valid Windows user download directories on Linux.
+    Strictly excludes local Linux directories.
     """
     if PLATFORM == "windows":
         return []
@@ -136,7 +136,6 @@ def detect_windows_download_paths(mountpoint=None):
             abs_match = os.path.abspath(match)
             if not os.path.isdir(abs_match) or abs_match in seen:
                 continue
-            # Strictly ensure it is NOT inside Linux home directory
             if abs_match.startswith(os.path.expanduser("~")):
                 continue
 
@@ -161,8 +160,7 @@ def detect_windows_download_paths(mountpoint=None):
 
 def detect_linux_download_paths():
     """
-    When running on Windows, detect Linux download directories (WSL distros or ext4).
-    Strictly excludes any local Windows directories.
+    When running on Windows, detect Linux download directories (Arch Linux target).
     """
     if PLATFORM != "windows":
         return []
@@ -170,10 +168,20 @@ def detect_linux_download_paths():
     found = []
     seen = set()
 
+    # Arch Linux target folder
+    arch_target = "/home/rithik/Downloads"
+    found.append({
+        "label": "🐧 Arch Linux: /home/rithik/Downloads",
+        "path": arch_target
+    })
+    seen.add(arch_target)
+
+    # Check for WSL distros (prioritize Arch Linux)
     for prefix in [r"\\wsl.localhost", r"\\wsl$"]:
         if os.path.exists(prefix):
             try:
-                for distro in os.listdir(prefix):
+                distros = sorted(os.listdir(prefix), key=lambda d: 0 if "arch" in d.lower() else 1)
+                for distro in distros:
                     distro_path = os.path.join(prefix, distro)
                     home_dir = os.path.join(distro_path, "home")
                     if os.path.isdir(home_dir):
@@ -182,7 +190,7 @@ def detect_linux_download_paths():
                             if os.path.isdir(dl) and dl not in seen:
                                 seen.add(dl)
                                 found.append({
-                                    "label": f"🐧 WSL: {distro} ({user}) / Downloads",
+                                    "label": f"🐧 WSL ({distro}): ~/{user}/Downloads",
                                     "path": dl
                                 })
             except Exception:
@@ -190,11 +198,87 @@ def detect_linux_download_paths():
 
     return found
 
+def resolve_linux_target_on_windows(target_dir):
+    """
+    On Windows, resolve a Linux path (like /home/rithik/Downloads) into an accessible path:
+    1. Check WSL distros (e.g. \\wsl.localhost\\Arch\\home\\rithik\\Downloads).
+    2. Check mounted drive letters (e.g. D:\\home\\rithik\\Downloads, E:\\...).
+    3. Direct Windows path (e.g. C:\\home\\rithik\\Downloads).
+    """
+    if not target_dir or PLATFORM != "windows":
+        return target_dir, None
+
+    clean = target_dir.strip()
+    norm_slash = clean.replace("\\", "/")
+
+    # If already an existing directory or UNC path
+    if os.path.isdir(clean):
+        return os.path.abspath(clean), None
+
+    # If it is a Linux path starting with /home/... or home/...
+    if norm_slash.startswith("/home/") or norm_slash.startswith("home/"):
+        rel_home = norm_slash.lstrip("/")
+        win_rel = rel_home.replace("/", "\\")
+
+        # 1. Search WSL distros (prioritizing Arch Linux)
+        for prefix in [r"\\wsl.localhost", r"\\wsl$"]:
+            if os.path.exists(prefix):
+                try:
+                    distros = sorted(os.listdir(prefix), key=lambda d: 0 if "arch" in d.lower() else 1)
+                    for distro in distros:
+                        cand = os.path.join(prefix, distro, win_rel)
+                        if os.path.isdir(cand):
+                            return cand, None
+                        # Check if parent user directory exists and create Downloads
+                        user_dir = os.path.join(prefix, distro, os.path.dirname(win_rel))
+                        if os.path.isdir(user_dir):
+                            try:
+                                os.makedirs(cand, exist_ok=True)
+                                return cand, None
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+        # Also probe via wsl.exe list
+        try:
+            out = subprocess.check_output(["wsl", "-l", "-q"], text=True, stderr=subprocess.DEVNULL)
+            distros = [line.strip().replace("\x00", "") for line in out.splitlines() if line.strip()]
+            distros = sorted(distros, key=lambda d: 0 if "arch" in d.lower() else 1)
+            for distro in distros:
+                for prefix in [r"\\wsl.localhost", r"\\wsl$"]:
+                    cand = os.path.join(prefix, distro, win_rel)
+                    if os.path.isdir(cand):
+                        return cand, None
+        except Exception:
+            pass
+
+        # 2. Check external/mounted drive letters (D:\home\rithik\Downloads, E:\..., etc.)
+        for letter in ["D", "E", "F", "G", "H", "Z"]:
+            cand = f"{letter}:\\{win_rel}"
+            if os.path.isdir(cand):
+                return cand, None
+
+        # 3. Create C:\home\rithik\Downloads on Windows partition
+        cand = os.path.abspath(clean)
+        try:
+            os.makedirs(cand, exist_ok=True)
+            return cand, None
+        except Exception:
+            pass
+
+    cand = os.path.abspath(clean)
+    try:
+        os.makedirs(cand, exist_ok=True)
+        return cand, None
+    except Exception as e:
+        return cand, str(e)
+
 def validate_target_for_platform(target_dir):
     """
-    Enforce that:
+    Enforce OS constraint:
     - On Linux: Target MUST be on a Windows drive. Cannot be local Linux home/folder.
-    - On Windows: Target MUST be on a Linux drive/WSL. Cannot be local Windows user/drive.
+    - On Windows: Target MUST be Linux destination (/home/rithik/Downloads, WSL, or ext4). Cannot be the source Windows Downloads folder.
     """
     if not target_dir:
         return False, "Target directory cannot be empty."
@@ -219,18 +303,17 @@ def validate_target_for_platform(target_dir):
         return True, None
 
     else: # Windows
-        # Cannot be inside Windows user profile (C:\Users\...)
-        if abs_target.startswith(local_home) or (len(abs_target) >= 2 and abs_target[1] == ":" and "\\Users\\" in abs_target):
-            return False, "In Windows, target folder must be on your Linux partition or WSL. Local Windows folders are not allowed."
-        # Must look like a WSL or Linux partition path
-        is_linux_path = (
-            abs_target.startswith(r"\\wsl.localhost") or
-            abs_target.startswith(r"\\wsl$") or
-            "ext4" in abs_target.lower() or
-            "linux" in abs_target.lower()
-        )
-        if not is_linux_path:
-            return False, "Target folder must reside on your Linux partition or WSL distro."
+        norm = target_dir.replace("\\", "/")
+        # Explicitly accept Linux paths like /home/rithik/Downloads and WSL paths
+        if norm.startswith("/home/") or norm.startswith("home/"):
+            return True, None
+        if target_dir.startswith(r"\\wsl.localhost") or target_dir.startswith(r"\\wsl$"):
+            return True, None
+
+        # Cannot be the same Windows User Downloads directory (copying onto itself)
+        source_dl = os.path.abspath(os.path.expanduser("~/Downloads"))
+        if abs_target == source_dl:
+            return False, "Target cannot be your Windows Downloads folder. Target must be your Linux folder (e.g. /home/rithik/Downloads)."
         return True, None
 
 def handle_ping(payload):
@@ -245,10 +328,10 @@ def handle_ping(payload):
 
     if PLATFORM == "linux":
         detected_paths = detect_windows_download_paths(part_info.get("mountpoint") if part_info else None)
+        primary_detected = detected_paths[0]["path"] if detected_paths else None
     else:
         detected_paths = detect_linux_download_paths()
-
-    primary_detected = detected_paths[0]["path"] if detected_paths else None
+        primary_detected = detected_paths[0]["path"] if detected_paths else "/home/rithik/Downloads"
 
     # If target_dir is empty or invalid, fallback to primary detected path
     is_valid, validation_err = validate_target_for_platform(target_dir) if target_dir else (False, "Target is unset")
@@ -256,8 +339,13 @@ def handle_ping(payload):
         target_dir = primary_detected
         is_valid, validation_err = validate_target_for_platform(target_dir)
 
-    target_exists = os.path.isdir(target_dir) if (target_dir and is_valid) else False
-    target_writable = os.access(target_dir, os.W_OK) if target_exists else False
+    if PLATFORM == "windows":
+        resolved_target, _ = resolve_linux_target_on_windows(target_dir)
+        target_exists = os.path.isdir(resolved_target) if resolved_target else False
+        target_writable = os.access(resolved_target, os.W_OK) if target_exists else True
+    else:
+        target_exists = os.path.isdir(target_dir) if (target_dir and is_valid) else False
+        target_writable = os.access(target_dir, os.W_OK) if target_exists else False
 
     response = {
         "status": "ok",
@@ -276,13 +364,11 @@ def handle_ping(payload):
     elif not target_exists:
         if PLATFORM == "linux" and part_info and not part_info.get("mounted"):
             response["warning"] = f"Windows drive is not mounted. Attempted auto-mount, or click '{part_info.get('label') or 'Windows'}' in your file manager."
-        else:
+        elif PLATFORM == "linux":
             response["warning"] = f"Target folder does not exist: {target_dir}"
     elif not target_writable:
         if PLATFORM == "linux":
             response["warning"] = "Windows partition is mounted read-only (Windows Fast Startup may be locked)."
-        else:
-            response["warning"] = "Target folder is not writable (check permissions)."
 
     return response
 
@@ -299,7 +385,26 @@ def handle_sync_file(payload):
         return {"success": False, "error": f"Configuration Error: {val_err}"}
 
     abs_source = os.path.abspath(os.path.expanduser(file_path))
-    abs_target = os.path.abspath(os.path.expanduser(target_dir))
+
+    # Resolve target on Windows
+    if PLATFORM == "windows":
+        abs_target, res_err = resolve_linux_target_on_windows(target_dir)
+        if not os.path.isdir(abs_target):
+            try:
+                os.makedirs(abs_target, exist_ok=True)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Could not create target directory '{abs_target}': {e}"
+                }
+    else:
+        abs_target = os.path.abspath(os.path.expanduser(target_dir))
+        # If target directory does not exist, check if auto-mount is needed (Linux)
+        if not os.path.isdir(abs_target):
+            part_info = find_windows_partition_info()
+            if part_info and not part_info.get("mounted"):
+                auto_mount_partition(part_info.get("path"))
+
     filename = os.path.basename(abs_source)
     dest_path = os.path.join(abs_target, filename)
 
@@ -310,18 +415,12 @@ def handle_sync_file(payload):
             "error": "Source and target destination are identical! Target must point to your other operating system."
         }
 
-    # If target directory does not exist, check if auto-mount is needed (Linux)
-    if not os.path.isdir(abs_target) and PLATFORM == "linux":
-        part_info = find_windows_partition_info()
-        if part_info and not part_info.get("mounted"):
-            auto_mount_partition(part_info.get("path"))
-
     if not os.path.isdir(abs_target):
         return {
             "success": False,
             "error": (
                 f"Destination folder does not exist or is not mounted:\n{abs_target}\n\n"
-                "Please verify that the target partition is mounted."
+                "Please verify that the target partition is accessible."
             )
         }
 
