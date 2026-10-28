@@ -2,7 +2,57 @@
 // Listens for completed downloads and delegates syncing to Native Messaging Host
 
 const NATIVE_HOST_NAME = "com.dualsync.bridge";
-const DEFAULT_WINDOWS_TARGET = "/run/media/rithik/Windows/Users/Asus/Downloads";
+const DEFAULT_LINUX_WINDOWS_TARGET = "/run/media/rithik/Windows/Users/Asus/Downloads";
+const DEFAULT_WIN_LINUX_TARGET = "\\\\wsl.localhost\\Ubuntu\\home\\user\\Downloads";
+
+// Cache platform
+let cachedOS = null;
+chrome.runtime.getPlatformInfo((info) => {
+  cachedOS = info?.os || "linux";
+});
+
+function isWindows() {
+  return cachedOS === "win";
+}
+
+function getDefaultTarget() {
+  return isWindows() ? DEFAULT_WIN_LINUX_TARGET : DEFAULT_LINUX_WINDOWS_TARGET;
+}
+
+// Validate target folder:
+// On Linux -> Must be Windows drive (never Linux /home/)
+// On Windows -> Must be Linux/WSL drive (never Windows C:\)
+function isValidTargetForOS(target) {
+  if (!target || typeof target !== "string") return false;
+  const clean = target.trim();
+
+  if (!isWindows()) {
+    // Linux OS: Target must be Windows
+    if (clean.startsWith("/home/") || clean === "/root" || clean.startsWith("/tmp")) {
+      return false;
+    }
+    return (
+      clean.includes("/Windows") ||
+      clean.includes("/windows") ||
+      clean.includes("/Users/") ||
+      clean.includes("/users/") ||
+      clean.startsWith("/run/media/") ||
+      clean.startsWith("/media/") ||
+      clean.startsWith("/mnt/")
+    );
+  } else {
+    // Windows OS: Target must be Linux / WSL
+    if (/^[A-Za-z]:\\/.test(clean) || clean.includes("\\Users\\")) {
+      return false;
+    }
+    return (
+      clean.startsWith("\\\\wsl.localhost") ||
+      clean.startsWith("\\\\wsl$") ||
+      clean.toLowerCase().includes("ext4") ||
+      clean.toLowerCase().includes("linux")
+    );
+  }
+}
 
 // Helper to extract filename from full path
 function getBaseName(filePath) {
@@ -70,18 +120,21 @@ chrome.downloads.onChanged.addListener(async (delta) => {
 
     const filePath = downloadItem.filename;
     const baseName = getBaseName(filePath);
+    const defaultTarget = getDefaultTarget();
 
     // Retrieve user settings
     chrome.storage.local.get(
       {
         autoSync: true,
         promptBeforeSync: true,
-        targetFolder: DEFAULT_WINDOWS_TARGET
+        targetFolder: defaultTarget
       },
       (config) => {
-        // Sanitize targetFolder if unset or accidentally pointing to Linux Downloads
-        if (!config.targetFolder || config.targetFolder === "/home/rithik/Downloads" || (config.targetFolder.startsWith("/home/") && !config.targetFolder.includes("Windows"))) {
-          config.targetFolder = DEFAULT_WINDOWS_TARGET;
+        // Enforce constraint:
+        // On Linux: Target MUST be Windows only.
+        // On Windows: Target MUST be Linux only.
+        if (!isValidTargetForOS(config.targetFolder)) {
+          config.targetFolder = defaultTarget;
           chrome.storage.local.set({ targetFolder: config.targetFolder });
         }
 
@@ -117,7 +170,7 @@ async function askUserToSync(downloadId, filePath, fileName, targetFolder) {
     timestamp: Date.now()
   };
 
-  // Persist pending item in chrome.storage.local (survives Service Worker termination)
+  // Persist pending item in chrome.storage.local
   await savePendingSync(syncId, syncData);
   await savePendingSync(notificationId, syncData);
 
@@ -172,14 +225,15 @@ function openPromptWindow(downloadId, filePath, fileName, targetFolder) {
 // Display Chrome Notification with buttons
 function sendSystemNotification(notificationId, fileName, targetFolder) {
   const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
+  const targetOS = isWindows() ? "Linux Drive (WSL)" : "Windows Drive";
 
   const optionsWithButtons = {
     type: "basic",
     iconUrl: iconUrl,
     title: "DualSync: Download Completed",
-    message: `Sync "${fileName}" to Windows Drive?\nTarget: ${targetFolder}`,
+    message: `Sync "${fileName}" to ${targetOS}?\nTarget: ${targetFolder}`,
     buttons: [
-      { title: "✓ Yes, Sync to Windows" },
+      { title: `✓ Yes, Sync to ${targetOS}` },
       { title: "✕ No, Skip" }
     ],
     priority: 2,
@@ -188,12 +242,11 @@ function sendSystemNotification(notificationId, fileName, targetFolder) {
 
   chrome.notifications.create(notificationId, optionsWithButtons, () => {
     if (chrome.runtime.lastError) {
-      console.warn("[DualSync] Rich notification failed, trying basic:", chrome.runtime.lastError.message);
       chrome.notifications.create(notificationId, {
         type: "basic",
         iconUrl: iconUrl,
         title: "DualSync: Download Completed",
-        message: `Click to sync "${fileName}" to Windows Drive (${targetFolder})`,
+        message: `Click to sync "${fileName}" to ${targetOS} (${targetFolder})`,
         priority: 2
       });
     }
@@ -225,7 +278,6 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   if (!syncData) return;
 
   chrome.notifications.clear(notificationId);
-  // Bring up popup window
   openPromptWindow(syncData.downloadId, syncData.filePath, syncData.fileName, syncData.targetFolder);
 });
 
@@ -234,7 +286,7 @@ chrome.notifications.onClosed.addListener(async (notificationId) => {
   await removePendingSync(notificationId);
 });
 
-// Listen for runtime messages from popup window or settings UI
+// Listen for runtime messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "confirm_sync") {
     const { downloadId, filePath, targetFolder, fileName } = message;
@@ -259,13 +311,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "test_prompt") {
-    // Simulate a download completion prompt for user testing
     const sampleDownloadId = `test_${Date.now()}`;
     const sampleFile = "Sample_Document.pdf";
-    const samplePath = `/home/rithik/Downloads/${sampleFile}`;
+    const samplePath = isWindows()
+      ? `C:\\Users\\Default\\Downloads\\${sampleFile}`
+      : `/home/rithik/Downloads/${sampleFile}`;
+    const defaultTarget = getDefaultTarget();
 
-    chrome.storage.local.get({ targetFolder: DEFAULT_WINDOWS_TARGET }, (config) => {
-      askUserToSync(sampleDownloadId, samplePath, sampleFile, config.targetFolder);
+    chrome.storage.local.get({ targetFolder: defaultTarget }, (config) => {
+      let target = config.targetFolder;
+      if (!isValidTargetForOS(target)) {
+        target = defaultTarget;
+      }
+      askUserToSync(sampleDownloadId, samplePath, sampleFile, target);
       sendResponse({ success: true });
     });
     return true;
@@ -275,19 +333,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Execute the file sync using Chrome Native Messaging Host
 function executeFileSync(filePath, targetFolder, fileName, callback = null) {
   const iconUrl = chrome.runtime.getURL("icons/icon-128.png");
+  const targetOS = isWindows() ? "Linux" : "Windows";
 
-  // Safety check: Don't attempt copying if source and target are the same folder
-  const sourceDir = filePath ? filePath.replace(/[/\\][^/\\]+$/, "") : "";
-  const normalizedTarget = targetFolder ? targetFolder.replace(/[/\\]+$/, "") : "";
-  if (sourceDir && normalizedTarget && sourceDir === normalizedTarget) {
-    const errorMsg = "Target destination is set to Linux Downloads, not your Windows drive.";
+  // Strict constraint: Validate target folder matches target OS
+  if (!isValidTargetForOS(targetFolder)) {
+    const errorMsg = isWindows()
+      ? "Target destination must be on your Linux partition or WSL, not Windows."
+      : "Target destination must be on your Windows drive, not Linux.";
     console.warn("[DualSync]", errorMsg);
 
     chrome.notifications.create(`dualsync_err_${Date.now()}`, {
       type: "basic",
       iconUrl: iconUrl,
       title: "DualSync: Configuration Error",
-      message: `${errorMsg}\nPlease open DualSync Settings and select your Windows drive.`
+      message: `${errorMsg}\nPlease open DualSync Settings and select your ${targetOS} drive.`
     });
 
     if (callback) callback({ success: false, error: errorMsg });
@@ -321,7 +380,7 @@ function executeFileSync(filePath, targetFolder, fileName, callback = null) {
     if (response && response.success) {
       console.log("[DualSync] Sync successful:", response);
 
-      // Increment stats in chrome.storage.local
+      // Increment stats
       chrome.storage.local.get({ syncedCount: 0 }, (items) => {
         chrome.storage.local.set({
           syncedCount: (items.syncedCount || 0) + 1,
@@ -334,7 +393,7 @@ function executeFileSync(filePath, targetFolder, fileName, callback = null) {
         type: "basic",
         iconUrl: iconUrl,
         title: "DualSync: File Synced!",
-        message: `"${fileName}" copied successfully to:\n${response.destPath || targetFolder}`
+        message: `"${fileName}" copied successfully to ${targetOS}:\n${response.destPath || targetFolder}`
       });
 
       if (callback) callback({ success: true, destPath: response.destPath });

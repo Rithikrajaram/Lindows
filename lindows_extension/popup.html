@@ -22,7 +22,7 @@
         </div>
         <div>
           <h1>DualSync</h1>
-          <p class="subtitle">Linux &larr;&rarr; Windows Drive Sync</p>
+          <p class="subtitle" id="subtitle-text">Linux &rarr; Windows Drive Sync</p>
         </div>
       </div>
       <div id="bridge-status-pill" class="status-pill status-unknown" title="Native host status">
@@ -49,8 +49,8 @@
       <!-- Section 1: Main Toggle -->
       <section class="card toggle-card">
         <div class="card-text">
-          <div class="card-title">Auto-Sync to Windows</div>
-          <div class="card-desc">Automatically mirror Linux downloads to your Windows partition</div>
+          <div class="card-title" id="auto-sync-title">Auto-Sync to Windows</div>
+          <div class="card-desc" id="auto-sync-desc">Automatically mirror Linux downloads to your Windows partition</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="auto-sync-toggle" checked>
@@ -72,21 +72,36 @@
 
       <!-- Section 3: Target Folder Configuration -->
       <section class="card input-card">
-        <label for="target-folder" class="input-label">
-          <span>Target Windows Download Folder</span>
-          <span class="tooltip" title="Absolute path on Linux where your Windows partition is mounted">&#9432;</span>
-        </label>
+        <div class="input-label-row">
+          <label for="target-folder" class="input-label" id="target-label-text">
+            Target Windows Download Folder
+          </label>
+          <div class="label-badges">
+            <span id="target-badge" class="os-badge os-badge-windows">🪟 Windows Only</span>
+            <span class="tooltip" id="target-tooltip" title="In Linux, only Windows partition folders are allowed. Local Linux folders cannot be selected.">&#9432;</span>
+          </div>
+        </div>
+
         <div class="input-wrapper">
-          <input type="text" id="target-folder" placeholder="/mnt/windows/Users/YourName/Downloads" spellcheck="false"
+          <input type="text" id="target-folder" placeholder="/run/media/rithik/Windows/Users/Asus/Downloads" spellcheck="false"
             autocomplete="off" />
         </div>
 
-        <div class="preset-chips">
-          <span class="preset-label">Detected:</span>
-          <button type="button" class="chip chip-detected" data-path="/run/media/rithik/Windows/Users/Asus/Downloads">✨
-            Asus / Downloads</button>
-          <button type="button" class="chip" data-path="/mnt/windows/Users/Downloads">/mnt/windows</button>
-          <button type="button" class="chip" data-path="/media/windows/Downloads">/media/windows</button>
+        <!-- Partition Mount Status Bar -->
+        <div id="mount-bar" class="mount-bar">
+          <div class="mount-left">
+            <span class="mount-dot" id="mount-dot"></span>
+            <span id="mount-status-text">Checking partition status...</span>
+          </div>
+          <button type="button" id="mount-drive-btn" class="mount-btn" style="display:none;">Mount Drive</button>
+        </div>
+
+        <!-- Detected Presets (Strictly valid OS partitions only) -->
+        <div class="preset-chips" id="preset-chips-box">
+          <span class="preset-label" id="preset-label">Detected Target:</span>
+          <div id="preset-chips-list" class="preset-chips-list">
+            <!-- Dynamically populated from native host -->
+          </div>
         </div>
       </section>
 
@@ -141,7 +156,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span>DualSync v1.0 &bull; Native Messaging Host</span>
+      <span>DualSync v1.3 &bull; Native Messaging Host</span>
       <a href="#" id="view-guide-link">Guide & Help</a>
     </footer>
   </div>
